@@ -102,6 +102,9 @@
   const typesFor = (phase) => { const ph = PHASES.find(x => x.name === phase); return ph ? ph.types : []; };
   const autoSubject = (p) => p.phase + ' - ' + p.type;
   const S = state.settings;
+  const cleanName = (n) => String(n || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim();
+  state.worklist.forEach(w => { w.name = cleanName(w.name); });
+  state.proposals.forEach(p => { p.oppName = cleanName(p.oppName); });
   if (S.autosave == null) S.autosave = true;
   if (!S.status) S.status = 'Completed';
   if (S.minProb == null) S.minProb = 60;
@@ -175,7 +178,7 @@
         }),
       scanned.length ? btn(L(`＋ Přidat vybrané do fronty (${selScan.size})`, `＋ Add selected to queue (${selScan.size})`), 'ok', () => {
         const ids = new Set(state.worklist.map(w => w.id)); let add = 0;
-        scanned.filter(o => selScan.has(o.id) && !ids.has(o.id)).forEach(o => { state.worklist.push({ id: o.id, name: o.name, account: o.account, created: o.created, stage: o.stage, url: o.url, done: false }); add++; });
+        scanned.filter(o => selScan.has(o.id) && !ids.has(o.id)).forEach(o => { state.worklist.push({ id: o.id, name: cleanName(o.name), account: o.account, created: o.created, stage: o.stage, url: o.url, done: false }); add++; });
         saveState(); log(L(`Přidáno ${add} opt do fronty.`, `Added ${add} opps.`)); selScan.clear(); renderAll();
       }, { disabled: !selScan.size }) : null);
     find.append(bar);
@@ -216,7 +219,7 @@
   async function runScan() {
     if (mode() === 'list') ensureChild(state.worklist[0].url);
     busy = true; progBar.style.width = '0'; renderAll();
-    try { await scanQueueInChild(); todo().forEach(p => proposalSel.add(p.id)); } finally { busy = false; renderAll(); }
+    try { await scanQueueInChild(); proposalSel.clear(); } finally { busy = false; renderAll(); }
   }
   function recompute() {
     let ids = [...queueSel]; if (!ids.length) ids = state.worklist.map(w => w.id);
