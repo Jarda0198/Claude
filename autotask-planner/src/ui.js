@@ -322,6 +322,12 @@
     const rid = currentRecordId();
     if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
     const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' });
+    if (/\/related\//.test(PWIN.location.pathname)) {
+      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Jste na vedlejší záložce opty', 'You are on a related list')),
+        h('div', { class: 'hint' }, L('Formulář tasku je na hlavní stránce opty (sekce Activity). Otevřete ji tlačítkem níže a nástroj pak bude pokračovat.', 'The task form is on the main opportunity page (Activity section). Open it with the button below.')),
+        h('div', { class: 'row', style: 'margin-top:10px' }, btn(L('Otevřít hlavní stránku opty', 'Open main opportunity page'), 'ok big', () => { PWIN.location.assign(PWIN.location.origin + '/lightning/r/Opportunity/' + rid + '/view'); }))));
+      mainEl.append(wrap); runBtn.style.display = 'none'; return;
+    }
     const mine = state.proposals.filter(p => p.oppId === rid);
     const open = mine.filter(p => !p.created), done = mine.filter(p => p.created);
     if (RW.ready && done.length && !open.length) {

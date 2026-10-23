@@ -84,9 +84,9 @@ window.__AUTOTASK_RUN = async () => { try {
   function weeksForRange(start,end){ const out=[]; let x=monday(start); const last=monday(end).getTime(); while(x.getTime()<=last){ out.push(new Date(x)); x.setDate(x.getDate()+7); } return out; }
   function parseActivityDate(s){ if(!s) return null; s=String(s).trim(); const now=new Date(); let m=s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/) || s.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,})\.?(?:,?\s*(\d{4}))?/); if(m){ let monStr,day; if(/[A-Za-z]/.test(m[1])){ monStr=m[1]; day=+m[2]; } else { day=+m[1]; monStr=m[2]; } const mon=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(monStr.slice(0,3).toLowerCase()); if(mon>=0){ const y=m[3]?+m[3]:now.getFullYear(); return new Date(y,mon,day,12,0,0); } } let iso=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/); if(iso){ return new Date(+iso[1],+iso[2]-1,+iso[3],12,0,0); } let num=s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/); if(num){ let a=+num[1],b=+num[2],y=+num[3]; if(y<100) y+=2000; let M,D; if(a>12){ D=a; M=b; } else if(b>12){ M=a; D=b; } else { const fmt=(state.settings&&state.settings.dateFormat)||'auto'; if(/^DD/.test(fmt)){ D=a; M=b; } else { M=a; D=b; } } return new Date(y,M-1,D,12,0,0); } const low=s.toLowerCase(); if(/today|dzi(s|ś)/.test(low)){ const d=new Date(now); d.setHours(12,0,0,0); return d; } if(/yesterday|wczoraj/.test(low)){ const d=new Date(now); d.setDate(d.getDate()-1); d.setHours(12,0,0,0); return d; } if(/tomorrow|jutro/.test(low)){ const d=new Date(now); d.setDate(d.getDate()+1); d.setHours(12,0,0,0); return d; } const d=new Date(s); return isNaN(d)?null:d; }
 
-  const RID_RE=/\/lightning\/r\/(?:[^/]+\/)?([a-zA-Z0-9]{15,18})\/view/;
+  const RID_RE=/\/lightning\/r\/(?:[^/]+\/)?([a-zA-Z0-9]{15,18})\/(?:view|related)/;
   function currentRecordId(){ const m=PWIN.location.pathname.match(RID_RE); return m?m[1]:null; }
-  function mode(){ const p=PWIN.location.pathname; if(/\/lightning\/o\/Opportunity\/(list|home)/.test(p)) return 'list'; if(/\/lightning\/r\/.+\/view/.test(p)&&currentRecordId()) return 'record'; return 'other'; }
+  function mode(){ const p=PWIN.location.pathname; if(/\/lightning\/o\/Opportunity\/(list|home)/.test(p)) return 'list'; if(/\/lightning\/r\/.+\/(view|related)/.test(p)&&currentRecordId()) return 'record'; return 'other'; }
 
   /* ---------- okno potomne ---------- */
   let childWin=null;
@@ -484,6 +484,12 @@ window.__AUTOTASK_RUN = async () => { try {
     const rid = currentRecordId();
     if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
     const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' });
+    if (/\/related\//.test(PWIN.location.pathname)) {
+      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Jste na vedlejší záložce opty', 'You are on a related list')),
+        h('div', { class: 'hint' }, L('Formulář tasku je na hlavní stránce opty (sekce Activity). Otevřete ji tlačítkem níže a nástroj pak bude pokračovat.', 'The task form is on the main opportunity page (Activity section). Open it with the button below.')),
+        h('div', { class: 'row', style: 'margin-top:10px' }, btn(L('Otevřít hlavní stránku opty', 'Open main opportunity page'), 'ok big', () => { PWIN.location.assign(PWIN.location.origin + '/lightning/r/Opportunity/' + rid + '/view'); }))));
+      mainEl.append(wrap); runBtn.style.display = 'none'; return;
+    }
     const mine = state.proposals.filter(p => p.oppId === rid);
     const open = mine.filter(p => !p.created), done = mine.filter(p => p.created);
     if (RW.ready && done.length && !open.length) {
