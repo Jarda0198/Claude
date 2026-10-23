@@ -254,6 +254,20 @@ window.__AUTOTASK_RUN = async () => { try {
   #${ID} .step b{width:26px;height:26px;border-radius:50%;background:#e5e9ef;color:var(--tx);display:flex;align-items:center;justify-content:center}
   #${ID} .step.on{border-color:var(--ac);color:var(--ac)} #${ID} .step.on b{background:var(--ac);color:#fff}
   #${ID} .step.ok b{background:var(--ok);color:#fff}
+  #${ID} .tlist{display:flex;flex-direction:column;gap:12px}
+  #${ID} .tcard{background:#fff;border:1px solid var(--bd);border-left:5px solid var(--ac);border-radius:10px;padding:12px 14px}
+  #${ID} .tcard.bad{border-left-color:var(--er);background:#fff7f8}
+  #${ID} .thead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-weight:700;font-size:14px}
+  #${ID} .terr{background:#fcd9dd;color:#8c0a16;border-radius:6px;padding:6px 10px;margin-bottom:10px;font-weight:600}
+  #${ID} .tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  #${ID} .tgrid select,#${ID} .tgrid input[type=text],#${ID} .tgrid input[type=date]{width:100%;height:36px;font-size:14px}
+  #${ID} .fld{font-size:12px;color:#33475b}
+  #${ID} :focus-visible{outline:3px solid #ffb800;outline-offset:1px}
+  #${ID} .bulk{position:static;box-shadow:none;margin:8px 0 0}
+  #${ID} details.bulkd{background:#fff8e6;border:1px solid #f0d58a;border-radius:10px;padding:8px 12px;margin-bottom:14px}
+  #${ID} details.bulkd>summary{cursor:pointer;font-weight:700;padding:4px 0}
+  #${ID} .donel{margin:0;padding-left:18px;color:#3f6b4b}
+  #${ID} .logpanel{margin-top:4px}
   #${ID} .empty{padding:28px;text-align:center;color:var(--mu)}
   `;
   PDOC.head.appendChild(el('style', { textContent: css }));
@@ -305,6 +319,7 @@ window.__AUTOTASK_RUN = async () => { try {
 
   /* ---------- kostra panelu ---------- */
   let TAB = 'opty';
+  let bulkOpen = false, logOpen = false;
   let VIEW = S.view === 'adv' ? 'adv' : 'simple';
   const panel = el('div', { id: ID });
   const selScan = new Set(), queueSel = new Set(), proposalSel = new Set();
@@ -321,18 +336,21 @@ window.__AUTOTASK_RUN = async () => { try {
   const dlBtn = btn(L('⬇ Stáhnout log', '⬇ Download log'), 'sec sm', () => { const a = h('a', { href: URL.createObjectURL(new Blob([fullLog()], { type: 'text/plain' })), download: 'autotask-log-' + Date.now() + '.txt' }); PDOC.body.append(a); a.click(); a.remove(); });
   const clrBtn = btn('🗑', 'sec sm', () => { try { localStorage.removeItem(LOGKEY); } catch (err) {} logEl.textContent = ''; }, { title: L('Smazat log', 'Clear log') });
   const runBtn = btn('', 'ok', () => runSelected());
+  const logPanel = h('div', { class: 'logpanel', style: 'display:none' }, h('div', { class: 'row', style: 'margin-bottom:6px' }, copyBtn, dlBtn, clrBtn), logEl);
+  const setLogOpen = (v) => { logOpen = v; logPanel.style.display = v ? '' : 'none'; logBtn.textContent = v ? L('▾ Skrýt log', '▾ Hide log') : L('▸ Log', '▸ Log'); if (v) logEl.scrollTop = logEl.scrollHeight; };
+  const logBtn = btn(L('▸ Log', '▸ Log'), 'sec sm', () => setLogOpen(!logOpen), { 'aria-expanded': 'false' });
   const stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; scanRunning = false; log(L('Zastavuji po dokončení aktuálního kroku…', 'Stopping after the current step…')); });
   panel.append(
     h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, viewBtn, langSel, miniBtn, closeBtn),
     tabsEl, mainEl,
-    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, copyBtn, dlBtn, clrBtn, stopBtn, runBtn), logEl)
+    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, logBtn, stopBtn, runBtn), logPanel)
   );
   PDOC.body.append(panel);
 
   const LOGKEY = 'autotask.log';
   const stamp = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0'); };
   const persist = (line) => { try { const a = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); a.push(line); localStorage.setItem(LOGKEY, JSON.stringify(a.slice(-800))); } catch (err) {} };
-  const log = (s) => { const line = '[' + stamp() + '] ' + s; logEl.textContent += (logEl.textContent ? '\n' : '') + line; logEl.scrollTop = logEl.scrollHeight; persist(line); try { console.log('[AutoTask]', s); } catch (err) {} };
+  const log = (s) => { const line = '[' + stamp() + '] ' + s; logEl.textContent += (logEl.textContent ? '\n' : '') + line; logEl.scrollTop = logEl.scrollHeight; persist(line); try { console.log('[AutoTask]', s); } catch (err) {} if (/CHYBA|ERROR|selhal|failed|nelze potvrdit|unconfirmed/i.test(s)) setLogOpen(true); };
   trace = log;
   const fullLog = () => { let a = []; try { a = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); } catch (err) {} return '=== AutoTask Planner log · ' + new Date().toISOString() + ' · ' + PWIN.location.href + ' · ' + navigator.userAgent + '\n' + a.join('\n'); };
   const setStatus = (s) => { statEl.textContent = s; statEl.title = s; };
@@ -369,28 +387,35 @@ window.__AUTOTASK_RUN = async () => { try {
   }
   function modeHint() { if (mode() === 'other' && !statEl.textContent) setStatus(L('Otevřete seznam Opportunities (/lightning/o/Opportunity/list) a spusťte nástroj tam.', 'Open the Opportunities list and launch the tool there.')); }
 
-  /* sdílená kontrolní tabulka (jednoduchý režim) – všechna povinná pole formuláře */
-  function reviewTable(open, showOpp) {
-    const head = h('input', { type: 'checkbox', checked: open.length > 0 && open.every(p => proposalSel.has(p.id)), onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
-    const th = (t) => h('th', null, t);
-    return h('div', { class: 'tw', style: 'max-height:46vh' }, h('table', null,
-      h('thead', null, h('tr', null, th(head), showOpp ? th('Opportunity') : null, th(L('Datum*', 'Date*')), th(L('Fáze* (Category)', 'Phase* (Category)')), th('Task Type'), th(L('Předmět', 'Subject')), th('Product*'), th('Audience*'), th('Status*'), th('Priority*'), th())),
-      h('tbody', null, open.map(p => {
-        const dis = false; const miss = missingFields(p);
-        const subj = h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); saveState(); } });
-        const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
-        const phSel = sel(PHASES.map(x => x.name), p.phase, v => { p.phase = v; tySel.textContent = ''; typesFor(v).forEach(t => tySel.append(h('option', { value: t }, t))); p.type = typesFor(v)[0]; tySel.value = p.type; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
-        return h('tr', { class: (p.error || miss.length) ? 'err' : '', title: miss.length ? L('Chybí: ', 'Missing: ') + miss.join(', ') : '' },
-          h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
-          showOpp ? h('td', { style: 'min-width:140px' }, h('b', null, p.oppName)) : null,
-          h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
-          h('td', { style: 'min-width:100px' }, phSel), h('td', { style: 'min-width:170px' }, tySel), h('td', { style: 'min-width:200px' }, subj),
-          h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
-          h('td', { style: 'min-width:150px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); })),
-          h('td', { style: 'min-width:110px' }, sel(STATUSES, p.status || 'Completed', v => { p.status = v; saveState(); })),
-          h('td', { style: 'min-width:80px' }, sel(PRIORITIES, p.priority || 'Normal', v => { p.priority = v; saveState(); })),
-          h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') })));
-      }))));
+  /* sdílený kontrolní seznam (jednoduchý režim): jeden task = jedna karta se svislým řazením polí */
+  function reviewTable(open, showOpp, adv) {
+    const allSel = open.length > 0 && open.every(p => proposalSel.has(p.id));
+    const top = h('label', { class: 'sw', style: 'margin-bottom:10px' }, h('input', { type: 'checkbox', checked: allSel, onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } }), L(`Vybrat všechny tasky (${open.length})`, `Select all tasks (${open.length})`));
+    const list = h('div', { class: 'tlist', role: 'list' }, open.map((p, i) => {
+      const miss = missingFields(p);
+      const subj = h('input', { type: 'text', value: p.subject, oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); saveState(); } });
+      const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
+      const phSel = sel(PHASES.map(x => x.name), p.phase, v => { p.phase = v; tySel.textContent = ''; typesFor(v).forEach(t => tySel.append(h('option', { value: t }, t))); p.type = typesFor(v)[0]; tySel.value = p.type; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
+      const dateI = h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } });
+      return h('section', { class: 'tcard' + ((p.error || miss.length) ? ' bad' : ''), role: 'listitem', 'aria-label': `${L('Task', 'Task')} ${i + 1}${showOpp ? ' – ' + p.oppName : ''}` },
+        h('div', { class: 'thead' },
+          h('label', { class: 'sw' }, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAllSoft(); } }), h('span', null, `${L('Task', 'Task')} ${i + 1}`, showOpp ? h('span', { class: 'mu' }, ' · ' + p.oppName) : null)),
+          h('div', { class: 'row', style: 'gap:6px' },
+            adv ? btn(L('▶ Vytvořit jen tento', '▶ Create only this'), 'sec sm', () => runOne(p), { disabled: busy }) : null,
+            adv ? btn(L('⎘ Duplikovat', '⎘ Duplicate'), 'sec sm', () => { const c = Object.assign({}, p, { id: mkId(), manual: true, error: '' }); state.proposals.push(c); proposalSel.add(c.id); saveState(); renderAll(); }) : null,
+            btn(L('Odebrat', 'Remove'), 'sec sm', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { 'aria-label': L('Odebrat task ', 'Remove task ') + (i + 1) }))),
+        (p.error || miss.length) ? h('div', { class: 'terr', role: 'alert' }, p.error || (L('Chybí: ', 'Missing: ') + miss.join(', '))) : null,
+        h('div', { class: 'tgrid' },
+          fld(L('Datum (Due Date) *', 'Date (Due Date) *'), dateI),
+          fld(L('Fáze (Category) *', 'Phase (Category) *'), phSel),
+          fld('Task Type', tySel),
+          fld('Product *', sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
+          fld('Audience *', sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); })),
+          fld('Status *', sel(STATUSES, p.status || 'Completed', v => { p.status = v; saveState(); })),
+          fld('Priority *', sel(PRIORITIES, p.priority || 'Normal', v => { p.priority = v; saveState(); })),
+          h('label', { class: 'fld', style: 'grid-column:1/-1' }, L('Předmět (Subject)', 'Subject'), subj)));
+    }));
+    return h('div', null, top, list);
   }
 
   /* ---------- JEDNODUCHÝ REŽIM (průvodce ve 3 krocích) ---------- */
@@ -411,7 +436,7 @@ window.__AUTOTASK_RUN = async () => { try {
     chipsEl.textContent = ''; tabsEl.textContent = '';
     if (mode() === 'record') { renderRecordSimple(); return; }
     const st = WZ.step;
-    const wrap = h('div', { style: 'max-width:1280px;margin:0 auto' }, stepper(st));
+    const wrap = h('div', { style: 'max-width:960px;margin:0 auto' }, stepper(st));
     if (st === 1) {
       const opts = wzOpts();
       if (!WZ.init) { state.worklist.forEach(w => WZ.sel.add(w.id)); WZ.init = true; }
@@ -519,7 +544,7 @@ window.__AUTOTASK_RUN = async () => { try {
     chipsEl.textContent = ''; tabsEl.textContent = '';
     const rid = currentRecordId();
     if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
-    const wrap = h('div', { style: 'max-width:1280px;margin:0 auto' });
+    const wrap = h('div', { style: 'max-width:960px;margin:0 auto' });
     if (/\/related\//.test(PWIN.location.pathname)) {
       wrap.append(h('div', { class: 'card' }, h('h3', null, L('Jste na vedlejší záložce opty', 'You are on a related list')),
         h('div', { class: 'hint' }, L('Formulář tasku je na hlavní stránce opty (sekce Activity). Otevřete ji tlačítkem níže a nástroj pak bude pokračovat.', 'The task form is on the main opportunity page (Activity section). Open it with the button below.')),
@@ -694,7 +719,7 @@ window.__AUTOTASK_RUN = async () => { try {
         h('span', { style: 'flex:1' }),
         btn(L('⎘ Duplikovat vybrané', '⎘ Duplicate selected'), 'sec', () => { const sl = selVis(); sl.forEach(p => { const c = Object.assign({}, p, { id: mkId(), manual: true, created: false, error: '' }); state.proposals.push(c); proposalSel.add(c.id); }); saveState(); renderAll(); }),
         btn(L('🗑 Smazat vybrané', '🗑 Delete selected'), 'sec', () => { const sl = new Set(selVis().map(p => p.id)); if (!sl.size || !confirm(L(`Smazat ${sl.size} návrhů?`, `Delete ${sl.size} proposals?`))) return; state.proposals = state.proposals.filter(p => !sl.has(p.id)); sl.forEach(i => proposalSel.delete(i)); saveState(); renderAll(); })));
-    mainEl.append(bulk);
+    mainEl.append(h('details', { class: 'bulkd', open: bulkOpen, ontoggle: e => { bulkOpen = e.target.open; } }, h('summary', null, L('⚡ Hromadné úpravy vybraných tasků', '⚡ Bulk edit selected tasks')), bulk));
 
     // tabulka
     const addOpp = sel(state.worklist.map(w => [w.id, w.name]), filterOpp || state.worklist[0].id);
@@ -708,30 +733,9 @@ window.__AUTOTASK_RUN = async () => { try {
         fld(L('Přidat vlastní tasky', 'Add custom tasks'), h('div', { class: 'row', style: 'gap:6px' }, addOpp, addN, btn(L('＋ Přidat', '＋ Add'), 'ok', () => { addTask(addOpp.value, null, Math.max(1, Math.min(50, +addN.value || 1))); renderAll(); })))));
     if (!list.length) card.append(h('div', { class: 'empty' }, L('Žádné návrhy. Naskenujte frontu nebo přidejte vlastní tasky.', 'No proposals. Scan the queue or add custom tasks.')));
     else {
-      const head = h('input', { type: 'checkbox', checked: visIds.length > 0 && visIds.every(i => proposalSel.has(i)), onchange: e => { visIds.forEach(i => e.target.checked ? proposalSel.add(i) : proposalSel.delete(i)); renderAll(); } });
-      const rows = list.map(p => {
-        const dis = !!p.created;
-        const subj = h('input', { type: 'text', value: p.subject, disabled: dis, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); saveState(); } });
-        const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); }, { disabled: dis });
-        const phSel = sel(PHASES.map(x => x.name), p.phase, v => { p.phase = v; tySel.textContent = ''; typesFor(v).forEach(t => tySel.append(h('option', { value: t }, t))); p.type = typesFor(v)[0]; tySel.value = p.type; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); }, { disabled: dis });
-        return h('tr', { class: dis ? 'done' : (p.error ? 'err' : '') },
-          h('td', null, dis ? h('span', { class: 'pill g' }, '✓') : h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAllSoft(); } })),
-          h('td', { style: 'min-width:130px' }, h('b', null, p.oppName), p.manual ? h('div', { class: 'mu' }, L('vlastní', 'custom')) : null),
-          h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, disabled: dis, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
-          h('td', { style: 'min-width:112px' }, phSel), h('td', { style: 'min-width:170px' }, tySel), h('td', { style: 'min-width:190px' }, subj),
-          h('td', { style: 'min-width:130px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); }, { disabled: dis })),
-          h('td', { style: 'min-width:160px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); }, { disabled: dis })),
-          h('td', { style: 'min-width:110px' }, sel(STATUSES, p.status || 'Completed', v => { p.status = v; saveState(); }, { disabled: dis })),
-          h('td', { style: 'min-width:80px' }, sel(PRIORITIES, p.priority || 'Normal', v => { p.priority = v; saveState(); }, { disabled: dis })),
-          h('td', { style: 'white-space:nowrap;text-align:right' },
-            dis ? h('span', { class: 'pill g' }, L('vytvořeno', 'created')) : [
-              btn('▶', 'ico', () => runOne(p), { title: L('Vytvořit jen tento task', 'Create only this task'), disabled: busy }), ' ',
-              btn('⎘', 'ico', () => { const c = Object.assign({}, p, { id: mkId(), manual: true, error: '' }); state.proposals.push(c); proposalSel.add(c.id); saveState(); renderAll(); }, { title: L('Duplikovat', 'Duplicate') }), ' ',
-              btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Smazat', 'Delete') })]));
-      });
-      card.append(h('div', { class: 'tw', style: 'max-height:56vh' }, h('table', null,
-        h('thead', null, h('tr', null, h('th', null, head), h('th', null, 'Opportunity'), h('th', null, L('Datum', 'Date')), h('th', null, L('Fáze', 'Phase')), h('th', null, 'Task Type'), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th', null, 'Audience'), h('th', null, 'Status'), h('th', null, 'Priority'), h('th'))),
-        h('tbody', null, rows))));
+      const openL = list.filter(p => !p.created), doneL = list.filter(p => p.created);
+      if (openL.length) card.append(reviewTable(openL, true, true));
+      if (doneL.length) card.append(h('h3', { style: 'margin:14px 0 6px' }, L(`Vytvořeno (${doneL.length})`, `Created (${doneL.length})`)), h('ul', { class: 'donel' }, doneL.map(p => h('li', null, '✓ ', p.date, ' · ', p.oppName, ' · ', p.subject))));
     }
     if (showExisting) {
       const ex = []; state.worklist.filter(w => !filterOpp || w.id === filterOpp).forEach(w => ((state.existing[w.id] || {}).tasks || []).forEach(t => ex.push({ opp: w.name, t })));
