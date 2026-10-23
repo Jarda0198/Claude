@@ -12,3 +12,49 @@ open(os.path.join(here,'dist','bookmarklet.txt'),'w',encoding='utf8').write(url)
 open(os.path.join(here,'dist','autotask-bookmarks.html'),'w',encoding='utf8').write(
  '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><A HREF="%s">AutoTask Planner</A>\n</DL><p>\n'%url)
 print('core',len(head+core),'bookmarklet',len(url))
+
+
+# ---------- rozšíření pro Chrome (Manifest V3) ----------
+import json, struct, zlib, shutil
+ext=os.path.join(here,'dist','extension')
+shutil.rmtree(ext,ignore_errors=True); os.makedirs(ext)
+body=core.rstrip()
+i0=body.index('(async () => {'); assert body.endswith('})();')
+open(os.path.join(ext,'core.js'),'w',encoding='utf8').write(head+'window.__AUTOTASK_RUN = async () => {'+body[i0+len('(async () => {'):-len('})();')]+'};\n')
+open(os.path.join(ext,'launcher.js'),'w',encoding='utf8').write("""(() => {
+  if (window.name === 'autotaskChild' || window.top !== window) return;
+  const mk = () => {
+    if (document.getElementById('autotask-launcher') || !document.body) return;
+    const b = document.createElement('button');
+    b.id = 'autotask-launcher'; b.textContent = 'AT'; b.title = 'AutoTask Planner';
+    b.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:2147483000;width:42px;height:42px;border-radius:50%;border:0;background:#0176d3;color:#fff;font:700 14px Arial;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.35)';
+    b.onclick = () => { try { window.__AUTOTASK_RUN(); } catch (e) { alert('AutoTask Planner: ' + e.message); } };
+    document.body.appendChild(b);
+  };
+  mk(); setInterval(mk, 2000);
+})();
+""")
+open(os.path.join(ext,'background.js'),'w',encoding='utf8').write("""chrome.action.onClicked.addListener((tab) => {
+  chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func: () => { if (window.__AUTOTASK_RUN) window.__AUTOTASK_RUN(); else alert('AutoTask Planner: otevřete Salesforce (lightning.force.com).'); } });
+});
+""")
+matches=['https://*.lightning.force.com/*']+(os.environ.get('AT_TEST_MATCH','').split(',') if os.environ.get('AT_TEST_MATCH') else [])
+json.dump({'manifest_version':3,'name':'AutoTask Planner','version':'2.2','description':'Pomocník pro hromadné vytváření Global Presales Tasků v Salesforce.',
+ 'permissions':['scripting','activeTab'],'host_permissions':['https://*.lightning.force.com/*'],
+ 'background':{'service_worker':'background.js'},'action':{'default_title':'AutoTask Planner','default_icon':{'48':'icon48.png'}},
+ 'icons':{'16':'icon16.png','48':'icon48.png','128':'icon128.png'},
+ 'content_scripts':[{'matches':matches,'js':['core.js','launcher.js'],'world':'MAIN','run_at':'document_idle','all_frames':False}]},
+ open(os.path.join(ext,'manifest.json'),'w',encoding='utf8'),indent=2,ensure_ascii=False)
+def png(n):
+    rows=b''
+    for y in range(n):
+        row=b'\x00'
+        for x in range(n):
+            cx=abs(x-n/2); cy=abs(y-n/2)
+            inside=(cx**2+cy**2)<(n/2)**2
+            row+=bytes((1,118,211,255)) if inside else bytes((0,0,0,0))
+        rows+=row
+    def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+    return b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',n,n,8,6,0,0,0))+ch(b'IDAT',zlib.compress(rows))+ch(b'IEND',b'')
+for n in (16,48,128): open(os.path.join(ext,'icon%d.png'%n),'wb').write(png(n))
+print('extension built')
