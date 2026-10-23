@@ -61,7 +61,6 @@
   #${ID} .at-prog{height:9px;background:#e5e9ef;border-radius:6px;overflow:hidden} #${ID} .at-prog>div{height:100%;width:0;background:linear-gradient(90deg,#0b5cab,#1fb5ad);transition:width .25s}
   #${ID} .at-frow{display:flex;gap:10px;align-items:center}
   #${ID} .at-stat{flex:1;color:var(--tx);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #${ID} .at-log:empty{display:none}
   #${ID} .at-log{min-height:40px}
   #${ID} .at-log{white-space:pre-wrap;background:#0f1b2d;color:#c7d6ea;border-radius:8px;padding:8px 10px;max-height:110px;overflow:auto;font:11.5px/1.45 Consolas,monospace}
   #${ID} .seg{display:inline-flex;border:1px solid #9eb9d6;border-radius:7px;overflow:hidden}
@@ -134,17 +133,24 @@
   const tabsEl = h('div', { class: 'at-tabs' });
   const mainEl = h('div', { class: 'at-main' });
   const progBar = h('div'), statEl = h('div', { class: 'at-stat' }), logEl = h('div', { class: 'at-log' });
-  const copyBtn = btn(L('📋 Kopírovat log', '📋 Copy log'), 'sec sm', () => { const t = logEl.textContent || statEl.textContent; try { navigator.clipboard.writeText(t); setStatus(L('Log zkopírován do schránky.', 'Log copied.')); } catch (e) { const ta = h('textarea', { value: t }); PDOC.body.append(ta); ta.select(); PDOC.execCommand('copy'); ta.remove(); } });
+  const copyBtn = btn(L('📋 Kopírovat log', '📋 Copy log'), 'sec sm', () => { const t = fullLog(); try { navigator.clipboard.writeText(t); setStatus(L('Log zkopírován do schránky.', 'Log copied.')); } catch (e) { const ta = h('textarea', { value: t }); PDOC.body.append(ta); ta.select(); PDOC.execCommand('copy'); ta.remove(); } });
+  const dlBtn = btn(L('⬇ Stáhnout log', '⬇ Download log'), 'sec sm', () => { const a = h('a', { href: URL.createObjectURL(new Blob([fullLog()], { type: 'text/plain' })), download: 'autotask-log-' + Date.now() + '.txt' }); PDOC.body.append(a); a.click(); a.remove(); });
+  const clrBtn = btn('🗑', 'sec sm', () => { try { localStorage.removeItem(LOGKEY); } catch (err) {} logEl.textContent = ''; }, { title: L('Smazat log', 'Clear log') });
   const runBtn = btn('', 'ok', () => runSelected());
   const stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; scanRunning = false; log(L('Zastavuji po dokončení aktuálního kroku…', 'Stopping after the current step…')); });
   panel.append(
     h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, viewBtn, langSel, miniBtn, closeBtn),
     tabsEl, mainEl,
-    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, copyBtn, stopBtn, runBtn), logEl)
+    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, copyBtn, dlBtn, clrBtn, stopBtn, runBtn), logEl)
   );
   PDOC.body.append(panel);
 
-  const log = (s) => { logEl.textContent += (logEl.textContent ? '\n' : '') + s; logEl.scrollTop = logEl.scrollHeight; };
+  const LOGKEY = 'autotask.log';
+  const stamp = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0'); };
+  const persist = (line) => { try { const a = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); a.push(line); localStorage.setItem(LOGKEY, JSON.stringify(a.slice(-800))); } catch (err) {} };
+  const log = (s) => { const line = '[' + stamp() + '] ' + s; logEl.textContent += (logEl.textContent ? '\n' : '') + line; logEl.scrollTop = logEl.scrollHeight; persist(line); try { console.log('[AutoTask]', s); } catch (err) {} };
+  trace = log;
+  const fullLog = () => { let a = []; try { a = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); } catch (err) {} return '=== AutoTask Planner log · ' + new Date().toISOString() + ' · ' + PWIN.location.href + ' · ' + navigator.userAgent + '\n' + a.join('\n'); };
   const setStatus = (s) => { statEl.textContent = s; statEl.title = s; };
   onProgress = (i, n) => { progBar.style.width = Math.round(100 * i / Math.max(1, n)) + '%'; };
   function gotoTab(t) { if (VIEW === 'simple') { if (t === 'plan' && WZ.step === 2) WZ.step = 3; renderAll(); return; } TAB = t; renderAll(); }
@@ -601,6 +607,7 @@
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
+  log(L('AutoTask Planner spuštěn. Režim: ', 'AutoTask Planner started. Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);

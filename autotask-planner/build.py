@@ -4,14 +4,32 @@ import os, urllib.parse
 here=os.path.dirname(os.path.abspath(__file__))
 rd=lambda f: open(os.path.join(here,'src',f),encoding='utf8').read()
 core=rd('engine.js')+rd('ui.js')
+FATAL = r"""
+function __atFatal(e){
+  try{ console.error('[AutoTask] FATAL', e); }catch(_){}
+  try{
+    var msg=(e&&e.stack)||String(e);
+    try{ var a=JSON.parse(localStorage.getItem('autotask.log')||'[]'); a.push('[FATAL] '+msg); localStorage.setItem('autotask.log',JSON.stringify(a.slice(-800))); }catch(_){}
+    var d=document.createElement('div');
+    d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#ba0517;color:#fff;font:13px/1.4 Arial;padding:10px 14px;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent='AutoTask Planner – chyba při spuštění:\n'+msg;
+    var c=document.createElement('button'); c.textContent='Kopírovat chybu / Copy'; c.style.cssText='display:block;margin-top:8px;padding:5px 10px;cursor:pointer';
+    c.onclick=function(){ try{ navigator.clipboard.writeText(msg); }catch(_){} }; d.appendChild(c);
+    var x=document.createElement('button'); x.textContent='✕'; x.style.cssText='position:absolute;top:6px;right:8px;cursor:pointer'; x.onclick=function(){ d.remove(); }; d.appendChild(x);
+    document.body.appendChild(d);
+  }catch(_){ alert('AutoTask Planner chyba: '+e); }
+}
+"""
+
 head="/* AutoTask Planner v2 (DOM-only, bez Salesforce API). Panel žije v okně Opportunities; skenování a vyplňování běží v jednom pomocném okně (same-origin). */\n"
 os.makedirs(os.path.join(here,'dist'),exist_ok=True)
-open(os.path.join(here,'dist','autotask-core.js'),'w',encoding='utf8').write(head+core)
-url='javascript:'+urllib.parse.quote(head+core,safe="()!~*'")
+wrapped=head+FATAL+'(async () => { try { await '+core[core.index('(async () => {'):].rstrip()[:-1]+'; } catch (e) { __atFatal(e); } })();\n'
+open(os.path.join(here,'dist','autotask-core.js'),'w',encoding='utf8').write(wrapped)
+url='javascript:'+urllib.parse.quote(wrapped,safe="()!~*'")
 open(os.path.join(here,'dist','bookmarklet.txt'),'w',encoding='utf8').write(url)
 open(os.path.join(here,'dist','autotask-bookmarks.html'),'w',encoding='utf8').write(
  '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><A HREF="%s">AutoTask Planner</A>\n</DL><p>\n'%url)
-print('core',len(head+core),'bookmarklet',len(url))
+print('core',len(wrapped),'bookmarklet',len(url))
 
 
 # ---------- rozšíření pro Chrome (Manifest V3) ----------
@@ -20,7 +38,7 @@ ext=os.path.join(here,'dist','extension')
 shutil.rmtree(ext,ignore_errors=True); os.makedirs(ext)
 body=core.rstrip()
 i0=body.index('(async () => {'); assert body.endswith('})();')
-open(os.path.join(ext,'core.js'),'w',encoding='utf8').write(head+'window.__AUTOTASK_RUN = async () => {'+body[i0+len('(async () => {'):-len('})();')]+'};\n')
+open(os.path.join(ext,'core.js'),'w',encoding='utf8').write(head+FATAL+'window.__AUTOTASK_RUN = async () => { try {'+body[i0+len('(async () => {'):-len('})();')]+'} catch (e) { __atFatal(e); } };\n')
 open(os.path.join(ext,'launcher.js'),'w',encoding='utf8').write("""(() => {
   if (window.name === 'autotaskChild' || window.top !== window) return;
   const mk = () => {

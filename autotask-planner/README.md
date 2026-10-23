@@ -19,6 +19,9 @@ Pokročilé funkce (hromadné úpravy, přehled týdnů, vlastní tasky, nastave
 ## Rychlá varianta: jedna opportunita → N tasků
 Otevřete záznam opportunity (`/lightning/r/Opportunity/.../view`) a spusťte nástroj. Zobrazí se karta „Vytvořit tasky v této opportunitě“: zadáte počet tasků (výchozí 5), týden, Product a Audience → **Připravit tasky** → zkontrolujete → **Vytvořit**. Fáze a typy se navrhnou podle toho, co už v opportunitě existuje. Bez pomocného okna, vše přímo v otevřené optě.
 
+## Log a diagnostika
+Dolní lišta (v jednoduchém i pokročilém režimu) zobrazuje log s časem. Tlačítka: **📋 Kopírovat log**, **⬇ Stáhnout log** (soubor .txt), **🗑** smazat. Log se ukládá i mezi spuštěními (localStorage). Při selhání otevření formuláře se do logu zapíše URL a seznam viditelných tlačítek. Pokud se skript nespustí, zobrazí se nahoře červený pruh s chybou (jde zkopírovat) a stejný výpis je v konzoli (`F12` → Console, prefix `[AutoTask]`).
+
 ## Instalace
 1. Z `dist/` naimportujte `autotask-bookmarks.html` do záložek prohlížeče (nebo vytvořte záložku s URL z `dist/bookmarklet.txt`).
 2. Starou záložku „AutoTask Planner“ nejdřív smažte.
