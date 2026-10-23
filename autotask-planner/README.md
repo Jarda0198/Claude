@@ -16,6 +16,9 @@ Běží jako bookmarklet, takže pracuje v přihlášené session; nic se neodes
 Průvodce ve 3 krocích: **1) vyberte opty → 2) vyberte týden a počet tasků → 3) zkontrolujte a vytvořte**.
 Pokročilé funkce (hromadné úpravy, přehled týdnů, vlastní tasky, nastavení) jsou za tlačítkem **⚙ Pokročilý režim** v záhlaví.
 
+## Rychlá varianta: jedna opportunita → N tasků
+Otevřete záznam opportunity (`/lightning/r/Opportunity/.../view`) a spusťte nástroj. Zobrazí se karta „Vytvořit tasky v této opportunitě“: zadáte počet tasků (výchozí 5), týden, Product a Audience → **Připravit tasky** → zkontrolujete → **Vytvořit**. Fáze a typy se navrhnou podle toho, co už v opportunitě existuje. Bez pomocného okna, vše přímo v otevřené optě.
+
 ## Instalace
 1. Z `dist/` naimportujte `autotask-bookmarks.html` do záložek prohlížeče (nebo vytvořte záložku s URL z `dist/bookmarklet.txt`).
 2. Starou záložku „AutoTask Planner“ nejdřív smažte.

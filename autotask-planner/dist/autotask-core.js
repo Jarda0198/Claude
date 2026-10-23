@@ -338,6 +338,7 @@
   }
   function renderSimple() {
     chipsEl.textContent = ''; tabsEl.textContent = '';
+    if (mode() === 'record') { renderRecordSimple(); return; }
     const st = WZ.step;
     const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' }, stepper(st));
     if (st === 1) {
@@ -418,6 +419,81 @@
         if (!S.autosave) c.append(h('div', { class: 'hint' }, L('Automatické ukládání je vypnuté – u každého tasku sami zkontrolujete formulář a kliknete na Save.', 'Auto-save is off – review each form and click Save yourself.')));
       }
       wrap.append(c);
+    }
+    mainEl.append(wrap);
+    runBtn.style.display = 'none';
+  }
+
+  /* ---------- REŽIM „OTEVŘENÁ OPPORTUNITA“: spustit na záznamu a vytvořit N tasků ---------- */
+  const RW = { n: 5, week: thisMonday(), rid: null, ready: false };
+  function recName() {
+    const w = state.worklist.find(x => x.id === currentRecordId()); if (w && w.name) return w.name;
+    const t = txt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1'));
+    return cleanName(t) || currentRecordId();
+  }
+  async function recPrepare() {
+    const rid = currentRecordId(); busy = true; renderAll();
+    try {
+      if (!state.worklist.some(x => x.id === rid)) state.worklist.push({ id: rid, name: recName(), account: '', url: PWIN.location.origin + `/lightning/r/Opportunity/${rid}/view`, done: false });
+      setStatus(L('Čtu existující aktivity…', 'Reading existing activities…'));
+      await processCurrentRecord();
+      state.proposals = state.proposals.filter(p => p.oppId !== rid);
+      const ex = (state.existing[rid] && state.existing[rid].tasks) || [];
+      let maxRank = -1; ex.forEach(t => { const r = phaseRank(t.subject); if (r > maxRank) maxRank = r; });
+      const flat = PHASES.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
+      let start = flat.findIndex(x => x.phase === PHASES[Math.min(maxRank + 1, PHASES.length - 1)].name); if (start < 0) start = 0;
+      const w = state.worklist.find(x => x.id === rid); const name = (w && w.name) || recName();
+      proposalSel.clear();
+      for (let i = 0; i < RW.n; i++) {
+        const f = flat[(start + i) % flat.length], date = isoShift(RW.week, (i % 4) + 1);
+        const p = { id: mkId(), oppId: rid, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', manual: true, created: false, error: '' };
+        state.proposals.push(p); proposalSel.add(p.id);
+      }
+      RW.ready = true; RW.rid = rid; saveState();
+      setStatus(L(`Existujících tasků: ${ex.length}. Připraveno ${RW.n} nových.`, `Existing tasks: ${ex.length}. ${RW.n} new ones prepared.`));
+    } catch (e) { log(L('CHYBA: ', 'ERROR: ') + e.message); }
+    finally { busy = false; renderAll(); }
+  }
+  function renderRecordSimple() {
+    chipsEl.textContent = ''; tabsEl.textContent = '';
+    const rid = currentRecordId();
+    if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
+    const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' });
+    const mine = state.proposals.filter(p => p.oppId === rid);
+    const open = mine.filter(p => !p.created), done = mine.filter(p => p.created);
+    if (RW.ready && done.length && !open.length) {
+      wrap.append(h('div', { class: 'card' }, h('h3', null, recName()), h('div', { class: 'empty' }, h('div', { style: 'font-size:34px' }, '✅'), h('b', null, L(`Hotovo – vytvořeno ${done.length} tasků.`, `Done – ${done.length} tasks created.`))),
+        h('div', { class: 'row', style: 'justify-content:center' }, btn(L('Vytvořit další', 'Create more'), '', () => { state.proposals = state.proposals.filter(p => p.oppId !== rid); RW.ready = false; saveState(); renderAll(); }))));
+    } else if (!RW.ready) {
+      const mondays = []; for (let i = -6; i <= 14; i++) mondays.push(isoShift(thisMonday(), 7 * i));
+      const nI = h('input', { type: 'number', min: 1, max: 50, value: RW.n, style: 'width:80px', onchange: e => { RW.n = Math.max(1, Math.min(50, +e.target.value || 5)); e.target.value = RW.n; } });
+      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Vytvořit tasky v této opportunitě', 'Create tasks in this opportunity')),
+        h('div', { style: 'font-size:15px;font-weight:700;margin-bottom:10px' }, recName()),
+        h('div', { class: 'row' },
+          fld(L('Počet tasků', 'Number of tasks'), nI),
+          fld(L('Týden', 'Week'), sel(mondays.map(m => [m, `${L('Týden', 'Week')} ${isoWeek(m)} · ${weekRange(m, 1)}${m === thisMonday() ? ' ' + L('(tento)', '(this)') : ''}`]), RW.week, v => { RW.week = v; }, { style: 'min-width:300px' })),
+          fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
+        h('div', { class: 'hint', style: 'margin-top:8px' }, L('Fáze a typy tasků se navrhnou podle toho, co v opportunitě už existuje. Před vytvořením je ještě zkontrolujete.', 'Phases and types follow what already exists in the opportunity. You can review them before creating.')),
+        h('div', { class: 'row', style: 'margin-top:12px;justify-content:flex-end' }, btn(L('Připravit tasky →', 'Prepare tasks →'), 'ok big', () => recPrepare(), { disabled: busy }))));
+    } else {
+      const nSel = open.filter(p => proposalSel.has(p.id)).length;
+      const head = h('input', { type: 'checkbox', checked: nSel === open.length, onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
+      wrap.append(h('div', { class: 'card' }, h('h3', null, recName(), h('span', { class: 'sub' }, L('Zkontrolujte a vytvořte', 'Review and create'))),
+        h('div', { class: 'hint' }, L('Datum, předmět, produkt i audience můžete přepsat přímo v řádku. Zrušte zaškrtnutí u tasků, které nechcete.', 'Date, subject, product and audience are editable inline. Untick tasks you don’t want.')),
+        h('div', { class: 'tw', style: 'max-height:42vh' }, h('table', null,
+          h('thead', null, h('tr', null, h('th', null, head), h('th', null, L('Datum', 'Date')), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th', null, 'Audience'), h('th'))),
+          h('tbody', null, open.map(p => h('tr', { class: p.error ? 'err' : '' },
+            h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
+            h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
+            h('td', { style: 'min-width:230px' }, h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = true; saveState(); } })),
+            h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
+            h('td', { style: 'min-width:150px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); })),
+            h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') }))))))),
+        h('div', { class: 'row', style: 'margin-top:12px;justify-content:space-between' },
+          h('div', { class: 'row' }, btn(L('← Změnit zadání', '← Change setup'), 'sec', () => { state.proposals = state.proposals.filter(p => p.oppId !== rid || p.created); RW.ready = false; saveState(); renderAll(); }),
+            h('label', { class: 'sw', style: 'height:32px' }, h('input', { type: 'checkbox', checked: !!S.autosave, onchange: e => { S.autosave = e.target.checked; saveState(); renderAll(); } }), L('Ukládat automaticky (Save)', 'Save automatically'))),
+          btn(L(`▶ Vytvořit ${nSel} tasků`, `▶ Create ${nSel} tasks`), 'ok big', () => runSelected(), { disabled: !nSel || busy })),
+        !S.autosave ? h('div', { class: 'hint' }, L('Automatické ukládání je vypnuté – u každého tasku sami zkontrolujete formulář a kliknete na Save.', 'Auto-save is off – review each form and click Save yourself.')) : null));
     }
     mainEl.append(wrap);
     runBtn.style.display = 'none';
