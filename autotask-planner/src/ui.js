@@ -62,6 +62,7 @@
   #${ID} .at-frow{display:flex;gap:10px;align-items:center}
   #${ID} .at-stat{flex:1;color:var(--tx);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #${ID} .at-log:empty{display:none}
+  #${ID} .at-log{min-height:40px}
   #${ID} .at-log{white-space:pre-wrap;background:#0f1b2d;color:#c7d6ea;border-radius:8px;padding:8px 10px;max-height:110px;overflow:auto;font:11.5px/1.45 Consolas,monospace}
   #${ID} .seg{display:inline-flex;border:1px solid #9eb9d6;border-radius:7px;overflow:hidden}
   #${ID} .seg button{border:0;background:#fff;color:var(--dk);padding:0 13px;height:32px;cursor:pointer;font-weight:600;border-right:1px solid #d3deea}
@@ -133,12 +134,13 @@
   const tabsEl = h('div', { class: 'at-tabs' });
   const mainEl = h('div', { class: 'at-main' });
   const progBar = h('div'), statEl = h('div', { class: 'at-stat' }), logEl = h('div', { class: 'at-log' });
+  const copyBtn = btn(L('📋 Kopírovat log', '📋 Copy log'), 'sec sm', () => { const t = logEl.textContent || statEl.textContent; try { navigator.clipboard.writeText(t); setStatus(L('Log zkopírován do schránky.', 'Log copied.')); } catch (e) { const ta = h('textarea', { value: t }); PDOC.body.append(ta); ta.select(); PDOC.execCommand('copy'); ta.remove(); } });
   const runBtn = btn('', 'ok', () => runSelected());
   const stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; scanRunning = false; log(L('Zastavuji po dokončení aktuálního kroku…', 'Stopping after the current step…')); });
   panel.append(
     h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, viewBtn, langSel, miniBtn, closeBtn),
     tabsEl, mainEl,
-    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, stopBtn, runBtn), logEl)
+    h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, copyBtn, stopBtn, runBtn), logEl)
   );
   PDOC.body.append(panel);
 
