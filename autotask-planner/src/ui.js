@@ -596,6 +596,7 @@
   if (!S.rangeStart) S.rangeStart = localIso(fiscalHalfStart());
   if (!S.rangeEnd) S.rangeEnd = localIso(new Date());
   if (!S.dateFormat) S.dateFormat = 'auto';
+  if (!PRODUCTS.includes(S.product)) S.product = 'PowerStore';
   if (!S.pace) S.pace = '1';
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
