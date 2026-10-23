@@ -276,26 +276,31 @@ function __atFatal(e){
   #${ID} details.bulkd>summary{cursor:pointer;font-weight:700;padding:4px 0}
   #${ID} .donel{margin:0;padding-left:18px;color:#3f6b4b}
   #${ID} .logpanel{margin-top:4px}
+  /* ===== výchozí kompaktní rozložení: pole ve 2 sloupcích, bez vodorovného posuvníku ===== */
+  #${ID} .at-main{max-width:1000px;width:100%;margin:0 auto}
+  #${ID} .tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #${ID} .tgrid select,#${ID} .tgrid input[type=text],#${ID} .tgrid input[type=date]{width:100%;min-width:0}
+  #${ID} .fld{min-width:0}
   /* ===== svislé rozložení: vše pod sebou v jednom sloupci ===== */
-  #${ID} .at-main{max-width:820px;width:100%;margin:0 auto}
-  #${ID} .row{flex-direction:column;align-items:stretch;gap:12px}
-  #${ID} .row>*{width:100%;max-width:100%}
-  #${ID} .row .btn{width:100%;height:40px;font-size:14px}
-  #${ID} .row .btn.ico{width:28px;height:28px}
-  #${ID} .row .sw{width:auto}
-  #${ID} .thead .row{flex-direction:row;width:auto;gap:6px}
-  #${ID} .thead .row>*{width:auto}
-  #${ID} .thead .row .btn{width:auto;height:30px;font-size:12px}
-  #${ID} .fld{width:100%}
-  #${ID} .fld select,#${ID} .fld input[type=text],#${ID} .fld input[type=date],#${ID} .fld input[type=number]{width:100%!important;min-width:0!important;height:38px;font-size:14px}
-  #${ID} .tgrid,#${ID} .grid2{grid-template-columns:1fr}
-  #${ID} .steps{flex-direction:column;gap:6px}
-  #${ID} .step{padding:8px 12px}
-  #${ID} .at-head{flex-wrap:wrap} #${ID} .at-frow{flex-wrap:wrap}
-  #${ID} .at-stat{flex-basis:100%;white-space:normal}
-  #${ID} .bulk .row{flex-direction:column}
-  #${ID} .week{max-width:100%}
-  #${ID} .tw{max-width:100%}
+  #${ID}.vert .at-main{max-width:820px;width:100%;margin:0 auto}
+  #${ID}.vert .row{flex-direction:column;align-items:stretch;gap:12px}
+  #${ID}.vert .row>*{width:100%;max-width:100%}
+  #${ID}.vert .row .btn{width:100%;height:40px;font-size:14px}
+  #${ID}.vert .row .btn.ico{width:28px;height:28px}
+  #${ID}.vert .row .sw{width:auto}
+  #${ID}.vert .thead .row{flex-direction:row;width:auto;gap:6px}
+  #${ID}.vert .thead .row>*{width:auto}
+  #${ID}.vert .thead .row .btn{width:auto;height:30px;font-size:12px}
+  #${ID}.vert .fld{width:100%}
+  #${ID}.vert .fld select,#${ID}.vert .fld input[type=text],#${ID}.vert .fld input[type=date],#${ID}.vert .fld input[type=number]{width:100%!important;min-width:0!important;height:38px;font-size:14px}
+  #${ID}.vert .tgrid,#${ID}.vert .grid2{grid-template-columns:1fr}
+  #${ID}.vert .steps{flex-direction:column;gap:6px}
+  #${ID}.vert .step{padding:8px 12px}
+  #${ID}.vert .at-head{flex-wrap:wrap} #${ID}.vert .at-frow{flex-wrap:wrap}
+  #${ID}.vert .at-stat{flex-basis:100%;white-space:normal}
+  #${ID}.vert .bulk .row{flex-direction:column}
+  #${ID}.vert .week{max-width:100%}
+  #${ID}.vert .tw{max-width:100%}
   #${ID} .empty{padding:28px;text-align:center;color:var(--mu)}
   `;
   PDOC.head.appendChild(el('style', { textContent: css }));
@@ -337,6 +342,7 @@ function __atFatal(e){
   if (S.readExisting == null) S.readExisting = true;
   if (!S.status) S.status = 'Completed';
   if (!S.priority) S.priority = 'Normal';
+  if (!S.layout) S.layout = 'compact';
   const PRIORITIES = ['Normal', 'High', 'Low'];
   state.proposals.forEach(p => { if (!p.priority) p.priority = 'Normal'; if (!p.status) p.status = 'Completed'; if (!p.audience) p.audience = S.audience; });
   if (S.minProb == null) S.minProb = 60;
@@ -355,6 +361,7 @@ function __atFatal(e){
   const chipsEl = h('div', { class: 'at-chips' });
   const langSel = sel([['cs', 'Čeština'], ['en', 'English']], LANG, v => { LANG = v; S.lang = v; saveState(); renderAll(); }, {});
   const miniBtn = h('button', { class: 'at-hbtn', title: L('Zmenšit / zvětšit', 'Minimize / restore'), onclick: () => panel.classList.toggle('mini') }, '▁');
+  const layoutBtn = h('button', { class: 'at-hbtn', style: 'font-size:12px;padding:0 10px', onclick: () => { S.layout = S.layout === 'vert' ? 'compact' : 'vert'; saveState(); renderAll(); } });
   const viewBtn = h('button', { class: 'at-hbtn', style: 'font-size:12px;padding:0 10px', onclick: () => { VIEW = VIEW === 'simple' ? 'adv' : 'simple'; S.view = VIEW; saveState(); renderAll(); } });
   const closeBtn = h('button', { class: 'at-hbtn', title: L('Zavřít', 'Close'), onclick: () => { batchRunning = scanRunning = false; panel.remove(); } }, '✕');
   const tabsEl = h('div', { class: 'at-tabs' });
@@ -369,7 +376,7 @@ function __atFatal(e){
   const logBtn = btn(L('▸ Log', '▸ Log'), 'sec sm', () => setLogOpen(!logOpen), { 'aria-expanded': 'false' });
   const stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; scanRunning = false; log(L('Zastavuji po dokončení aktuálního kroku…', 'Stopping after the current step…')); });
   panel.append(
-    h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, viewBtn, langSel, miniBtn, closeBtn),
+    h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, layoutBtn, viewBtn, langSel, miniBtn, closeBtn),
     tabsEl, mainEl,
     h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, logBtn, stopBtn, runBtn), logPanel)
   );
@@ -391,6 +398,9 @@ function __atFatal(e){
 
   /* ---------- hlavní render ---------- */
   function renderAll() {
+    panel.classList.toggle('vert', S.layout === 'vert');
+    layoutBtn.textContent = S.layout === 'vert' ? L('▥ 2 sloupce', '▥ 2 columns') : L('☰ 1 sloupec', '☰ 1 column');
+    layoutBtn.title = L('Přepnout rozložení polí: 2 sloupce / 1 sloupec', 'Switch field layout: 2 columns / 1 column');
     viewBtn.textContent = VIEW === 'simple' ? L('⚙ Pokročilý režim', '⚙ Advanced mode') : L('✨ Jednoduchý režim', '✨ Simple mode');
     stopBtn.style.display = (busy || VIEW === 'adv') ? '' : 'none';
     mainEl.textContent = '';
@@ -838,7 +848,7 @@ function __atFatal(e){
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
-  log('AutoTask Planner v2.8 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
+  log('AutoTask Planner v2.9 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);
