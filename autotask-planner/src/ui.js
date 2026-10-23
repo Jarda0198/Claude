@@ -630,7 +630,7 @@
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
-  log('AutoTask Planner v2.6 (2026-10-23) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
+  log('AutoTask Planner v2.7 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);
