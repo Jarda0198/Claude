@@ -76,3 +76,26 @@ def png(n):
     return b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',n,n,8,6,0,0,0))+ch(b'IDAT',zlib.compress(rows))+ch(b'IEND',b'')
 for n in (16,48,128): open(os.path.join(ext,'icon%d.png'%n),'wb').write(png(n))
 print('extension built')
+
+
+# ---------- krátké varianty bookmarkletu (minifikace + gzip) ----------
+import subprocess, gzip, base64, re as _re
+terser=os.environ.get('AT_TERSER') or shutil.which('terser')
+src=open(os.path.join(here,'dist','autotask-core.js'),encoding='utf8').read()
+if terser:
+    mini=subprocess.run([terser,'-c','-m','--comments','false'],input=src,capture_output=True,text=True,check=True).stdout
+else:
+    mini=src; print('terser nenalezen – bez minifikace')
+open(os.path.join(here,'dist','autotask-snippet.js'),'w',encoding='utf8').write(mini)
+light='javascript:'+_re.sub(r'[%#\n\r]|[^\x00-\x7f]',lambda m:urllib.parse.quote(m.group(0)),mini)
+open(os.path.join(here,'dist','bookmarklet-mini.txt'),'w',encoding='utf8').write(light)
+b64=base64.b64encode(gzip.compress(mini.encode('utf8'),9)).decode()
+loader=("(async()=>{try{const b=Uint8Array.from(atob('%s'),c=>c.charCodeAt(0));"
+ "const s=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text();"
+ "try{(0,eval)(s)}catch(e1){const u=URL.createObjectURL(new Blob([s],{type:'text/javascript'}));const t=document.createElement('script');"
+ "t.src=u;t.onerror=()=>alert('AutoTask: stránka blokuje spuštění skriptu (CSP).');document.body.appendChild(t)}}catch(e){alert('AutoTask chyba: '+e.message)}})()")%b64
+open(os.path.join(here,'dist','bookmarklet-kratky.js'),'w',encoding='utf8').write(loader)
+open(os.path.join(here,'dist','bookmarklet-kratky.txt'),'w',encoding='utf8').write('javascript:'+loader)
+open(os.path.join(here,'dist','autotask-bookmarks-kratky.html'),'w',encoding='utf8').write(
+ '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><A HREF="javascript:%s">AutoTask Planner</A>\n</DL><p>\n'%urllib.parse.quote(loader,safe="()!~*'"))
+print('mini',len(mini),'bookmarklet-mini',len(light),'bookmarklet-kratky',len(loader)+11)
