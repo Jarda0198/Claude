@@ -125,10 +125,11 @@ window.__AUTOTASK_RUN = async () => { try {
   function phaseRank(subject){ const s=(subject||'').toLowerCase(); if(/requirement|deep.?dive|workload|environment|discover|lead.?in/.test(s)) return 0; if(/assess|analysis|analyz|cloud/.test(s)) return 1; if(/design|proposal|presentation|rfp|scope|validation/.test(s)) return 2; if(/demo|proof|poc|competitive|alternative|defend|review/.test(s)) return 3; return -1; }
   /* hooky pro UI */
   let onProgress=()=>{};
+  function missingFields(p){ const m=[]; if(!p.date) m.push('Due Date'); if(!p.status) m.push('Status'); if(!p.phase) m.push('Category'); if(!p.type) m.push('Task Type'); if(!p.audience) m.push('Audience'); if(!p.product) m.push('Product'); if(!p.priority) m.push('Priority'); if(!(p.subject||'').trim()) m.push('Subject'); return m; }
   const mkId=()=>'m-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   const STATUSES=['Completed','Not Started','In Progress','Waiting on someone else','Deferred'];
   function mergeProposals(oppId, props){ const keep=state.proposals.filter(p=>p.oppId===oppId&&p.manual&&!p.created); state.proposals=state.proposals.filter(p=>p.oppId!==oppId).concat(props,keep); }
-  function buildProposals(opp, existingTasks){ const startIso=state.settings.rangeStart||localIso(fiscalHalfStart()); const endIso=state.settings.rangeEnd||localIso(new Date()); const perWeek=Math.max(1,+state.settings.perWeek||3); const weeks=weeksForRange(new Date(startIso+'T12:00:00'), new Date(endIso+'T12:00:00')); let maxRank=-1; existingTasks.forEach(t=>{ const r=phaseRank(t.subject); if(r>maxRank) maxRank=r; }); let planIndex=maxRank+1; const out=[]; weeks.forEach((w,wi)=>{ const key=weekKey(w); const count=existingTasks.filter(t=>t.dueDate&&weekKey(t.dueDate)===key).length; const need=Math.max(0,perWeek-count); const phase=PHASES[Math.min(planIndex+wi,PHASES.length-1)]; for(let slot=0;slot<need;slot++){ const date=new Date(w); date.setDate(date.getDate()+Math.min(4,slot+1)); let di=localIso(date); if(di<startIso) di=startIso; if(di>endIso) di=endIso; const type=phase.types[slot%phase.types.length]; out.push({ id:'p-'+opp.id+'-'+di+'-'+slot, oppId:opp.id, oppName:opp.name, week:key, date:di, phase:phase.name, type, subject:phase.name+' - '+type, product:state.settings.product, audience:state.settings.audience, status:state.settings.status||'Completed' }); } }); return out; }
+  function buildProposals(opp, existingTasks){ const startIso=state.settings.rangeStart||localIso(fiscalHalfStart()); const endIso=state.settings.rangeEnd||localIso(new Date()); const perWeek=Math.max(1,+state.settings.perWeek||3); const weeks=weeksForRange(new Date(startIso+'T12:00:00'), new Date(endIso+'T12:00:00')); let maxRank=-1; existingTasks.forEach(t=>{ const r=phaseRank(t.subject); if(r>maxRank) maxRank=r; }); let planIndex=maxRank+1; const out=[]; weeks.forEach((w,wi)=>{ const key=weekKey(w); const count=existingTasks.filter(t=>t.dueDate&&weekKey(t.dueDate)===key).length; const need=Math.max(0,perWeek-count); const phase=PHASES[Math.min(planIndex+wi,PHASES.length-1)]; for(let slot=0;slot<need;slot++){ const date=new Date(w); date.setDate(date.getDate()+Math.min(4,slot+1)); let di=localIso(date); if(di<startIso) di=startIso; if(di>endIso) di=endIso; const type=phase.types[slot%phase.types.length]; out.push({ id:'p-'+opp.id+'-'+di+'-'+slot, oppId:opp.id, oppName:opp.name, week:key, date:di, phase:phase.name, type, subject:phase.name+' - '+type, product:state.settings.product, audience:state.settings.audience, status:state.settings.status||'Completed', priority:state.settings.priority||'Normal' }); } }); return out; }
 
   /* ---------- kreator Global Presales Task (Aura; dziala na CTX) ---------- */
   function menuOpen(){ return deepAll('a.select[aria-expanded="true"], div.uiMenuList.visible').some(isVisible); }
@@ -153,7 +154,8 @@ window.__AUTOTASK_RUN = async () => { try {
   function clearReminder(){ for(const host of deepAll('lightning-primitive-input-checkbox')){ const lbl=deepFirst('span.slds-form-element__label',host.shadowRoot||host); if(!lbl||lbl.textContent.trim()!=='Reminder Set') continue; const cb=(host.shadowRoot||host).querySelector('input[type="checkbox"]'); if(cb&&(cb.checked||host.hasAttribute('checked'))){ const W=CTX.win||window; cb.checked=false; host.removeAttribute('checked'); cb.dispatchEvent(new (W.Event||Event)('change',{bubbles:true,composed:true})); cb.dispatchEvent(new (W.Event||Event)('click',{bubbles:true,composed:true})); } return; } }
   async function changeDropdown(from,to,logfn){ const findLink=(label)=>deepAll('a.select').find(a=>a.textContent.trim()===label&&isVisible(a)); for(let attempt=1;attempt<=3;attempt++){ const link=await pwaitFor(()=>findLink(from),5000); if(!link) return !!findLink(to); ['mousedown','mouseup','click'].forEach(t=>mouse(link,t)); await psleep(500); const node=await pwaitFor(()=>deepFind('a, li, span, div, [role="menuitem"], [role="option"]',e=>e.textContent.trim()===to&&isVisible(e)&&e!==link),3000); if(node){ const target=node.closest('a, li, [role="menuitem"], [role="option"]')||node; ['pointerover','pointerenter','mouseover','mouseenter','mousemove'].forEach(t=>mouse(target,t)); await psleep(200); ['mousedown','mouseup','click'].forEach(t=>mouse(target,t)); await psleep(500); if(!findLink(to)&&menuOpen()){ sendEnter((CTX.doc&&CTX.doc.activeElement)||link); await psleep(500); } } if(menuOpen()){ const open=deepAll('a.select[aria-expanded="true"]').find(isVisible); if(open) ['mousedown','mouseup','click'].forEach(t=>mouse(open,t)); await psleep(300); } const ok=await pwaitFor(()=>findLink(to),1500); if(logfn) logfn(L(`  [${from} → ${to}] pokus ${attempt}: ${ok?'nastaveno':'NE'}`,`  [${from} -> ${to}] attempt ${attempt}: ${ok?'set':'NO'}`)); if(ok&&!menuOpen()) return true; await psleep(500); } return false; }
   async function moveInDualListbox(text){ const W=CTX.win||window; const opts=deepAll('div[role="option"]').filter(isVisible); const opt=opts.find(o=>o.textContent.trim()===text)||opts.find(o=>o.textContent.trim().includes(text)); if(!opt) return false; opt.focus(); await psleep(300); opt.focus(); opt.dispatchEvent(new (W.KeyboardEvent||KeyboardEvent)('keydown',{bubbles:true,cancelable:true,view:W,ctrlKey:true,keyCode:39,key:'ArrowRight',which:39})); await psleep(300); return true; }
-  async function fillOneTask(p, logfn){ await openForm(logfn); clearReminder(); await psleep(500); await ensureDueDate(p.date, logfn); await psleep(300); setSubject(p.subject); await psleep(500); logfn(L('Reminder, Due Date, Subject: OK','Reminder, Due Date, Subject: OK')); const wantSt=p.status||'Completed'; if(wantSt!=='Not Started'){ const st=await changeDropdown('Not Started', wantSt, logfn); logfn('Status -> '+wantSt+': '+(st?'OK':L('NE','NO'))); if(!st) throw new Error(L('Nepodařilo se nastavit status: ','Could not set status: ')+wantSt); } const cat=await changeDropdown('--None--', p.phase, logfn); logfn('Category -> '+p.phase+': '+(cat?'OK':L('NE','NO'))); if(!cat) throw new Error(L('Nepodařilo se nastavit Category: ','Could not set Category: ')+p.phase); const tt=await changeDropdown('--None--', p.type, logfn); logfn('Task Type -> '+p.type+': '+(tt?'OK':L('NE','NO'))); if(!tt) throw new Error(L('Nepodařilo se nastavit Task Type: ','Could not set Task Type: ')+p.type); const au=await moveInDualListbox(p.audience); logfn('Audience -> '+p.audience+': '+(au?'OK':L('NE','NO'))); const pr=await moveInDualListbox(p.product); logfn('Product -> '+p.product+': '+(pr?'OK':L('NE','NO'))); return {audience:au, product:pr}; }
+  async function fillOneTask(p, logfn){ await openForm(logfn); clearReminder(); await psleep(500); await ensureDueDate(p.date, logfn); await psleep(300); setSubject(p.subject); await psleep(500); logfn(L('Reminder, Due Date, Subject: OK','Reminder, Due Date, Subject: OK')); const wantSt=p.status||'Completed'; if(wantSt!=='Not Started'){ const st=await changeDropdown('Not Started', wantSt, logfn); logfn('Status -> '+wantSt+': '+(st?'OK':L('NE','NO'))); if(!st) throw new Error(L('Nepodařilo se nastavit status: ','Could not set status: ')+wantSt); } const cat=await changeDropdown('--None--', p.phase, logfn); logfn('Category -> '+p.phase+': '+(cat?'OK':L('NE','NO'))); if(!cat) throw new Error(L('Nepodařilo se nastavit Category: ','Could not set Category: ')+p.phase); const tt=await changeDropdown('--None--', p.type, logfn); logfn('Task Type -> '+p.type+': '+(tt?'OK':L('NE','NO'))); if(!tt) throw new Error(L('Nepodařilo se nastavit Task Type: ','Could not set Task Type: ')+p.type); const au=await moveInDualListbox(p.audience); logfn('Audience -> '+p.audience+': '+(au?'OK':L('NE','NO'))); const pr=await moveInDualListbox(p.product); logfn('Product -> '+p.product+': '+(pr?'OK':L('NE','NO'))); const wantPr=p.priority||'Normal'; if(wantPr!=='Normal'){ const pri=await changeDropdown('Normal', wantPr, logfn); logfn('Priority -> '+wantPr+': '+(pri?'OK':L('NE','NO'))); if(!pri) throw new Error(L('Nepodařilo se nastavit Priority: ','Could not set Priority: ')+wantPr); }
+    if(p.comment){ try{ const host=deepAll('.slds-form-element').find(x=>/Actions\s*\/\s*Comments/i.test(txt(x))&&deepOne('textarea',x)); const ta=host&&deepOne('textarea',host); if(ta){ nativeSet(ta,p.comment,['input','change']); logfn('Comments: OK'); } else logfn('Comments: '+L('pole nenalezeno','field not found')); }catch(err){ logfn('Comments: '+err.message); } } return {audience:au, product:pr}; }
   async function fillAndSave(p, autosave, logfn){ await fillOneTask(p, logfn); const ddEl=dueDateEl(); const ddOk=!!(ddEl&&(ddEl.value||'').trim())&&!dueFormatError(); logfn(L('Due Date před uložením: ','Due Date before save: ')+(ddOk?'OK ('+p.date+')':L('CHYBÍ!','MISSING!'))); await psleep(300); if(autosave){ if(!ddOk){ logfn(L('Automatické ukládání přerušeno — Due Date je prázdné.','Auto-save aborted — Due Date empty.')); return false; } const s=findSaveButton(); if(s){ s.click(); const closed=await pwaitFor(()=>!composerOpen(),10000); await pwaitFor(()=>!deepAll('lightning-spinner, .slds-spinner_container, .slds-spinner').some(isVisible),8000); logfn(closed?(L('Uloženo ✓ — ','Saved ✓ — ')+p.subject):L('Save kliknut (bez potvrzení zavření formuláře).','Save clicked (no close confirmation).')); return closed; } logfn(L('Tlačítko Save nenalezeno — uložte ručně.','No Save button — save manually.')); return false; } logfn(L('Zkontrolujte a klikněte na Save v otevřeném okně...','Review and click Save in the open window...')); const closed=await pwaitFor(()=>!composerOpen(),120000); return closed; }
 
   /* ---------- orkiestracja przez okno potomne ---------- */
@@ -281,6 +283,9 @@ window.__AUTOTASK_RUN = async () => { try {
   if (S.autosave == null) S.autosave = true;
   if (S.readExisting == null) S.readExisting = true;
   if (!S.status) S.status = 'Completed';
+  if (!S.priority) S.priority = 'Normal';
+  const PRIORITIES = ['Normal', 'High', 'Low'];
+  state.proposals.forEach(p => { if (!p.priority) p.priority = 'Normal'; if (!p.status) p.status = 'Completed'; if (!p.audience) p.audience = S.audience; });
   if (S.minProb == null) S.minProb = 60;
   if (!S.audience) S.audience = 'Customer Remote';
   const PACES = () => [['0.5', 'Turbo', L('Nejrychlejší – na stabilní lince', 'Fastest – for a stable connection')], ['1', L('Rychle', 'Fast'), L('Doporučeno', 'Recommended')], ['2', L('Klidně', 'Calm'), L('Když SF zahazuje volby v menu', 'If SF drops menu choices')], ['3', L('Velmi pomalu', 'Very slow'), L('Poslední záchrana', 'Last resort')]];
@@ -353,6 +358,30 @@ window.__AUTOTASK_RUN = async () => { try {
   }
   function modeHint() { if (mode() === 'other' && !statEl.textContent) setStatus(L('Otevřete seznam Opportunities (/lightning/o/Opportunity/list) a spusťte nástroj tam.', 'Open the Opportunities list and launch the tool there.')); }
 
+  /* sdílená kontrolní tabulka (jednoduchý režim) – všechna povinná pole formuláře */
+  function reviewTable(open, showOpp) {
+    const head = h('input', { type: 'checkbox', checked: open.length > 0 && open.every(p => proposalSel.has(p.id)), onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
+    const th = (t) => h('th', null, t);
+    return h('div', { class: 'tw', style: 'max-height:46vh' }, h('table', null,
+      h('thead', null, h('tr', null, th(head), showOpp ? th('Opportunity') : null, th(L('Datum*', 'Date*')), th(L('Fáze* (Category)', 'Phase* (Category)')), th('Task Type'), th(L('Předmět', 'Subject')), th('Product*'), th('Audience*'), th('Status*'), th('Priority*'), th())),
+      h('tbody', null, open.map(p => {
+        const dis = false; const miss = missingFields(p);
+        const subj = h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); saveState(); } });
+        const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
+        const phSel = sel(PHASES.map(x => x.name), p.phase, v => { p.phase = v; tySel.textContent = ''; typesFor(v).forEach(t => tySel.append(h('option', { value: t }, t))); p.type = typesFor(v)[0]; tySel.value = p.type; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } saveState(); });
+        return h('tr', { class: (p.error || miss.length) ? 'err' : '', title: miss.length ? L('Chybí: ', 'Missing: ') + miss.join(', ') : '' },
+          h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
+          showOpp ? h('td', { style: 'min-width:140px' }, h('b', null, p.oppName)) : null,
+          h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
+          h('td', { style: 'min-width:100px' }, phSel), h('td', { style: 'min-width:170px' }, tySel), h('td', { style: 'min-width:200px' }, subj),
+          h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
+          h('td', { style: 'min-width:150px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); })),
+          h('td', { style: 'min-width:110px' }, sel(STATUSES, p.status || 'Completed', v => { p.status = v; saveState(); })),
+          h('td', { style: 'min-width:80px' }, sel(PRIORITIES, p.priority || 'Normal', v => { p.priority = v; saveState(); })),
+          h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') })));
+      }))));
+  }
+
   /* ---------- JEDNODUCHÝ REŽIM (průvodce ve 3 krocích) ---------- */
   const todayIso = () => localIso(new Date());
   const isoWeek = (iso) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const w1 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7); };
@@ -371,7 +400,7 @@ window.__AUTOTASK_RUN = async () => { try {
     chipsEl.textContent = ''; tabsEl.textContent = '';
     if (mode() === 'record') { renderRecordSimple(); return; }
     const st = WZ.step;
-    const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' }, stepper(st));
+    const wrap = h('div', { style: 'max-width:1280px;margin:0 auto' }, stepper(st));
     if (st === 1) {
       const opts = wzOpts();
       if (!WZ.init) { state.worklist.forEach(w => WZ.sel.add(w.id)); WZ.init = true; }
@@ -434,17 +463,8 @@ window.__AUTOTASK_RUN = async () => { try {
       } else if (!open.length) {
         c.append(h('div', { class: 'empty' }, L('Pro zvolené období není co doplnit (cíl je splněn) nebo se tasky nenačetly.', 'Nothing to add for this period (target met) or tasks failed to load.')), h('div', { class: 'row', style: 'justify-content:center' }, btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 2; renderAll(); })));
       } else {
-        const head = h('input', { type: 'checkbox', checked: nSel === open.length, onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
-        c.append(h('div', { class: 'hint' }, L('Zrušte zaškrtnutí u tasků, které nechcete. Datum, předmět a produkt můžete přepsat přímo v řádku.', 'Untick tasks you don’t want. Date, subject and product can be edited inline.')),
-          h('div', { class: 'tw', style: 'max-height:42vh' }, h('table', null,
-            h('thead', null, h('tr', null, h('th', null, head), h('th', null, 'Opportunity'), h('th', null, L('Datum', 'Date')), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th'))),
-            h('tbody', null, open.map(p => h('tr', { class: p.error ? 'err' : '' },
-              h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
-              h('td', { style: 'min-width:140px' }, h('b', null, p.oppName)),
-              h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
-              h('td', { style: 'min-width:220px' }, h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = true; saveState(); } })),
-              h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
-              h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') }))))))),
+        c.append(h('div', { class: 'hint' }, L('Pole označená * jsou ve formuláři povinná. Assigned To zůstává přihlášený uživatel, Reminder se vypíná. Vše lze přepsat v řádku, tasky odškrtnout.', 'Fields marked * are required in the form. Assigned To stays the logged-in user, Reminder is turned off. Everything is editable inline.')),
+          reviewTable(open, true),
           h('div', { class: 'row', style: 'margin-top:12px;justify-content:space-between' },
             h('div', { class: 'row' }, btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 2; renderAll(); }),
               h('label', { class: 'sw', style: 'height:32px' }, h('input', { type: 'checkbox', checked: !!S.autosave, onchange: e => { S.autosave = e.target.checked; saveState(); renderAll(); } }), L('Ukládat automaticky (Save)', 'Save automatically'))),
@@ -471,7 +491,7 @@ window.__AUTOTASK_RUN = async () => { try {
     if (S.readExisting) { const ex = (state.existing[oppId] && state.existing[oppId].tasks) || []; let mr = -1; ex.forEach(t => { const rk = phaseRank(t.subject); if (rk > mr) mr = rk; }); const si = flat.findIndex(x => x.phase === PHASES[Math.min(mr + 1, PHASES.length - 1)].name); start = si < 0 ? 0 : si; }
     for (let i = 0; i < n; i++) {
       const f = flat[(start + i) % flat.length], date = isoShift(weekMon, (i % 4) + 1);
-      const p = { id: mkId(), oppId, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', manual: true, created: false, error: '' };
+      const p = { id: mkId(), oppId, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', priority: S.priority || 'Normal', manual: true, created: false, error: '' };
       state.proposals.push(p); proposalSel.add(p.id);
     }
   }
@@ -488,7 +508,7 @@ window.__AUTOTASK_RUN = async () => { try {
     chipsEl.textContent = ''; tabsEl.textContent = '';
     const rid = currentRecordId();
     if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
-    const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' });
+    const wrap = h('div', { style: 'max-width:1280px;margin:0 auto' });
     if (/\/related\//.test(PWIN.location.pathname)) {
       wrap.append(h('div', { class: 'card' }, h('h3', null, L('Jste na vedlejší záložce opty', 'You are on a related list')),
         h('div', { class: 'hint' }, L('Formulář tasku je na hlavní stránce opty (sekce Activity). Otevřete ji tlačítkem níže a nástroj pak bude pokračovat.', 'The task form is on the main opportunity page (Activity section). Open it with the button below.')),
@@ -514,18 +534,9 @@ window.__AUTOTASK_RUN = async () => { try {
         h('div', { class: 'row', style: 'margin-top:12px;justify-content:flex-end' }, btn(L('Připravit tasky →', 'Prepare tasks →'), 'ok big', () => recPrepare(), { disabled: busy }))));
     } else {
       const nSel = open.filter(p => proposalSel.has(p.id)).length;
-      const head = h('input', { type: 'checkbox', checked: nSel === open.length, onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
       wrap.append(h('div', { class: 'card' }, h('h3', null, recName(), h('span', { class: 'sub' }, L('Zkontrolujte a vytvořte', 'Review and create'))),
-        h('div', { class: 'hint' }, L('Datum, předmět, produkt i audience můžete přepsat přímo v řádku. Zrušte zaškrtnutí u tasků, které nechcete.', 'Date, subject, product and audience are editable inline. Untick tasks you don’t want.')),
-        h('div', { class: 'tw', style: 'max-height:42vh' }, h('table', null,
-          h('thead', null, h('tr', null, h('th', null, head), h('th', null, L('Datum', 'Date')), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th', null, 'Audience'), h('th'))),
-          h('tbody', null, open.map(p => h('tr', { class: p.error ? 'err' : '' },
-            h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
-            h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
-            h('td', { style: 'min-width:230px' }, h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = true; saveState(); } })),
-            h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
-            h('td', { style: 'min-width:150px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); })),
-            h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') }))))))),
+        h('div', { class: 'hint' }, L('Pole označená * jsou ve formuláři povinná. Assigned To zůstává přihlášený uživatel. Vše lze přepsat v řádku, tasky odškrtnout.', 'Fields marked * are required. Assigned To stays the logged-in user. Everything is editable inline.')),
+        reviewTable(open, false),
         h('div', { class: 'row', style: 'margin-top:12px;justify-content:space-between' },
           h('div', { class: 'row' }, btn(L('← Změnit zadání', '← Change setup'), 'sec', () => { state.proposals = state.proposals.filter(p => p.oppId !== rid || p.created); RW.ready = false; saveState(); renderAll(); }),
             h('label', { class: 'sw', style: 'height:32px' }, h('input', { type: 'checkbox', checked: !!S.autosave, onchange: e => { S.autosave = e.target.checked; saveState(); renderAll(); } }), L('Ukládat automaticky (Save)', 'Save automatically'))),
@@ -609,7 +620,7 @@ window.__AUTOTASK_RUN = async () => { try {
   function addTask(oppId, from, n) {
     const w = state.worklist.find(x => x.id === oppId); if (!w) return;
     for (let i = 0; i < n; i++) {
-      const base = from ? Object.assign({}, from) : { phase: PHASES[0].name, type: PHASES[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status };
+      const base = from ? Object.assign({}, from) : { phase: PHASES[0].name, type: PHASES[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status, priority: S.priority };
       const p = Object.assign(base, { id: mkId(), oppId, oppName: w.name, manual: true, created: false, error: '' });
       if (from && n > 0) p.date = isoShift(from.date, from.__shift || 0);
       p.week = wkOf(p.date); p.subject = from ? from.subject : autoSubject(p);
@@ -641,7 +652,7 @@ window.__AUTOTASK_RUN = async () => { try {
     const selVis = () => list.filter(p => !p.created && proposalSel.has(p.id));
 
     // hromadné úpravy
-    const B = { phase: '', type: '', product: '', audience: '', status: '', date: '', shift: '' };
+    const B = { phase: '', type: '', product: '', audience: '', status: '', priority: '', date: '', shift: '' };
     const typeSel = sel([['', L('— beze změny —', '— no change —')]], '');
     const bPhase = sel([['', L('— beze změny —', '— no change —')], ...PHASES.map(x => x.name)], '', v => { B.phase = v; typeSel.textContent = ''; [['', L('— beze změny —', '— no change —')], ...(v ? typesFor(v) : PHASES.flatMap(x => x.types)).map(t => [t, t])].forEach(([a, b]) => typeSel.append(h('option', { value: a }, b))); B.type = ''; });
     typeSel.onchange = () => { B.type = typeSel.value; };
@@ -653,7 +664,7 @@ window.__AUTOTASK_RUN = async () => { try {
       h('div', { class: 'row' },
         fld(L('Fáze', 'Phase'), bPhase), fld('Task Type', typeSel),
         fld('Product', sel([...nochg, ...PRODUCTS], '', v => B.product = v)), fld('Audience', sel([...nochg, ...AUDIENCES], '', v => B.audience = v)),
-        fld('Status', sel([...nochg, ...STATUSES], '', v => B.status = v)),
+        fld('Status', sel([...nochg, ...STATUSES], '', v => B.status = v)), fld('Priority', sel([...nochg, ...PRIORITIES], '', v => B.priority = v)),
         fld(L('Nastavit datum', 'Set date'), h('input', { type: 'date', onchange: e => B.date = e.target.value })),
         fld(L('Posunout o dní (±)', 'Shift by days (±)'), h('input', { type: 'number', style: 'width:90px', placeholder: '0', oninput: e => B.shift = e.target.value })),
         btn(L('Použít na vybrané', 'Apply to selected'), '', () => {
@@ -662,7 +673,7 @@ window.__AUTOTASK_RUN = async () => { try {
             const patch = {};
             if (B.phase) { patch.phase = B.phase; if (!typesFor(B.phase).includes(p.type)) patch.type = typesFor(B.phase)[0]; }
             if (B.type) { const ph = PHASES.find(x => x.types.includes(B.type)); if (ph) patch.phase = ph.name; patch.type = B.type; }
-            if (B.product) patch.product = B.product; if (B.audience) patch.audience = B.audience; if (B.status) patch.status = B.status;
+            if (B.product) patch.product = B.product; if (B.audience) patch.audience = B.audience; if (B.status) patch.status = B.status; if (B.priority) patch.priority = B.priority;
             if (B.date) patch.date = B.date; else if (+B.shift) patch.date = isoShift(p.date, +B.shift);
             Object.assign(p, patch); if (patch.date) p.week = wkOf(p.date);
             if ((patch.phase || patch.type) && !p.customSubject) p.subject = autoSubject(p);
@@ -700,6 +711,7 @@ window.__AUTOTASK_RUN = async () => { try {
           h('td', { style: 'min-width:130px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); }, { disabled: dis })),
           h('td', { style: 'min-width:160px' }, sel(AUDIENCES, p.audience || S.audience, v => { p.audience = v; saveState(); }, { disabled: dis })),
           h('td', { style: 'min-width:110px' }, sel(STATUSES, p.status || 'Completed', v => { p.status = v; saveState(); }, { disabled: dis })),
+          h('td', { style: 'min-width:80px' }, sel(PRIORITIES, p.priority || 'Normal', v => { p.priority = v; saveState(); }, { disabled: dis })),
           h('td', { style: 'white-space:nowrap;text-align:right' },
             dis ? h('span', { class: 'pill g' }, L('vytvořeno', 'created')) : [
               btn('▶', 'ico', () => runOne(p), { title: L('Vytvořit jen tento task', 'Create only this task'), disabled: busy }), ' ',
@@ -707,7 +719,7 @@ window.__AUTOTASK_RUN = async () => { try {
               btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Smazat', 'Delete') })]));
       });
       card.append(h('div', { class: 'tw', style: 'max-height:56vh' }, h('table', null,
-        h('thead', null, h('tr', null, h('th', null, head), h('th', null, 'Opportunity'), h('th', null, L('Datum', 'Date')), h('th', null, L('Fáze', 'Phase')), h('th', null, 'Task Type'), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th', null, 'Audience'), h('th', null, 'Status'), h('th'))),
+        h('thead', null, h('tr', null, h('th', null, head), h('th', null, 'Opportunity'), h('th', null, L('Datum', 'Date')), h('th', null, L('Fáze', 'Phase')), h('th', null, 'Task Type'), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th', null, 'Audience'), h('th', null, 'Status'), h('th', null, 'Priority'), h('th'))),
         h('tbody', null, rows))));
     }
     if (showExisting) {
@@ -734,7 +746,7 @@ window.__AUTOTASK_RUN = async () => { try {
     mainEl.append(h('div', { class: 'grid2' },
       h('div', { class: 'card' }, h('h3', null, L('Výchozí hodnoty nových tasků', 'Defaults for new tasks')), h('div', { class: 'row' },
         fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); })),
-        fld('Status', sel(STATUSES, S.status, v => { S.status = v; saveState(); }))),
+        fld('Status', sel(STATUSES, S.status, v => { S.status = v; saveState(); })), fld('Priority', sel(PRIORITIES, S.priority, v => { S.priority = v; saveState(); }))),
         h('div', { class: 'hint', style: 'margin-top:8px' }, L('Platí pro nově generované tasky. Existující návrhy změníte v tabulce nebo hromadně v záložce ②. „Not Started“ = status se nemění.', 'Applies to newly generated tasks. Change existing proposals in tab ② (inline or bulk). “Not Started” = status is left untouched.'))),
       h('div', { class: 'card' }, h('h3', null, L('Plánování', 'Planning')), h('div', { class: 'row' },
         fld(L('Tasky od', 'Tasks from'), h('input', { type: 'date', value: S.rangeStart, onchange: e => { S.rangeStart = e.target.value; saveState(); } })),
@@ -757,6 +769,8 @@ window.__AUTOTASK_RUN = async () => { try {
   /* ---------- spouštění vytváření ---------- */
   async function runSelected() {
     const chosen = todo().filter(p => proposalSel.has(p.id)); if (!chosen.length || busy) return;
+    const bad = chosen.filter(p => missingFields(p).length);
+    if (bad.length) { bad.forEach(p => { p.error = L('Chybí: ', 'Missing: ') + missingFields(p).join(', '); }); saveState(); alert(L(`U ${bad.length} tasků chybí povinná pole (označeno červeně). Doplňte je.`, `${bad.length} tasks have missing required fields (marked red).`)); renderAll(); return; }
     const auto = !!S.autosave;
     if (!confirm(L(`Vytvořit ${chosen.length} tasků${auto ? ' a automaticky je ULOŽIT (Save)?' : ' (Save klikáte ručně u každého)?'}`, `Create ${chosen.length} tasks${auto ? ' and SAVE them automatically?' : ' (you click Save manually)?'}`))) return;
     if (mode() === 'list') ensureChild(PWIN.location.origin + `/lightning/r/Opportunity/${chosen[0].oppId}/view`);

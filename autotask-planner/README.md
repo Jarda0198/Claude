@@ -22,6 +22,9 @@ Otevřete záznam opportunity (`/lightning/r/Opportunity/.../view`) a spusťte n
 ## Log a diagnostika
 Dolní lišta (v jednoduchém i pokročilém režimu) zobrazuje log s časem. Tlačítka: **📋 Kopírovat log**, **⬇ Stáhnout log** (soubor .txt), **🗑** smazat. Log se ukládá i mezi spuštěními (localStorage). Při selhání otevření formuláře se do logu zapíše URL a seznam viditelných tlačítek. Pokud se skript nespustí, zobrazí se nahoře červený pruh s chybou (jde zkopírovat) a stejný výpis je v konzoli (`F12` → Console, prefix `[AutoTask]`).
 
+## Pole formuláře Global Presales Task
+Nástroj vyplňuje všechna povinná pole: **Due Date, Status, Category (fáze), Audience, Product, Priority** (+ Task Type a Subject). **Assigned To** zůstává přihlášený uživatel, **Reminder Set** se vypíná. Povinná pole jsou v tabulkách označena `*` a před vytvořením se kontroluje, že žádné nechybí (řádek se jinak označí červeně). Volitelné pole „Actions / Comments“ nástroj umí vyplnit, pokud task obsahuje `comment`.
+
 ## Instalace
 1. Z `dist/` naimportujte `autotask-bookmarks.html` do záložek prohlížeče (nebo vytvořte záložku s URL z `dist/bookmarklet.txt`).
 2. Starou záložku „AutoTask Planner“ nejdřív smažte.
