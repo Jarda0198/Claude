@@ -288,7 +288,7 @@
   }
 
   /* ---------- REŽIM „OTEVŘENÁ OPPORTUNITA“: spustit na záznamu a vytvořit N tasků ---------- */
-  const RW = { n: 5, week: thisMonday(), rid: null, ready: false };
+  const RW = { n: 5, week: thisMonday(), rid: null, ready: false, read: true };
   function recName() {
     const w = state.worklist.find(x => x.id === currentRecordId()); if (w && w.name) return w.name;
     const t = txt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1'));
@@ -299,7 +299,7 @@
     try {
       if (!state.worklist.some(x => x.id === rid)) state.worklist.push({ id: rid, name: recName(), account: '', url: PWIN.location.origin + `/lightning/r/Opportunity/${rid}/view`, done: false });
       setStatus(L('Čtu existující aktivity…', 'Reading existing activities…'));
-      await processCurrentRecord();
+      if (RW.read) await processCurrentRecord(); else { state.existing[rid] = { name: (state.worklist.find(x => x.id === rid) || {}).name || rid, tasks: [] }; log(L('Existující tasky se nečtou (vypnuto).', 'Existing tasks not read (disabled).')); }
       state.proposals = state.proposals.filter(p => p.oppId !== rid);
       const ex = (state.existing[rid] && state.existing[rid].tasks) || [];
       let maxRank = -1; ex.forEach(t => { const r = phaseRank(t.subject); if (r > maxRank) maxRank = r; });
@@ -342,7 +342,8 @@
           fld(L('Počet tasků', 'Number of tasks'), nI),
           fld(L('Týden', 'Week'), sel(mondays.map(m => [m, `${L('Týden', 'Week')} ${isoWeek(m)} · ${weekRange(m, 1)}${m === thisMonday() ? ' ' + L('(tento)', '(this)') : ''}`]), RW.week, v => { RW.week = v; }, { style: 'min-width:300px' })),
           fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
-        h('div', { class: 'hint', style: 'margin-top:8px' }, L('Fáze a typy tasků se navrhnou podle toho, co v opportunitě už existuje. Před vytvořením je ještě zkontrolujete.', 'Phases and types follow what already exists in the opportunity. You can review them before creating.')),
+        h('label', { class: 'sw', style: 'margin-top:10px' }, h('input', { type: 'checkbox', checked: RW.read, onchange: e => { RW.read = e.target.checked; renderAll(); } }), L('Přečíst existující tasky v opportunitě (doporučeno)', 'Read existing tasks (recommended)')),
+        h('div', { class: 'hint', style: 'margin-top:4px' }, RW.read ? L('Fáze a typy se navrhnou tak, aby navazovaly na to, co už v opportunitě existuje. Před vytvořením je ještě zkontrolujete.', 'Phases and types continue from what already exists. You can review them before creating.') : L('Návrh začne od fáze Discover. Fáze a typy změníte v řádcích.', 'Plan starts at Discover. Change phases/types in the rows.')),
         h('div', { class: 'row', style: 'margin-top:12px;justify-content:flex-end' }, btn(L('Připravit tasky →', 'Prepare tasks →'), 'ok big', () => recPrepare(), { disabled: busy }))));
     } else {
       const nSel = open.filter(p => proposalSel.has(p.id)).length;
