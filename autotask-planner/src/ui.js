@@ -191,7 +191,7 @@
   const dm = (iso) => { const [y, m, d] = iso.split('-'); return +d + '.' + +m + '.'; };
   const weekRange = (mon, n) => { const end = isoShift(mon, 7 * n - 1); return dm(mon) + ' – ' + dm(end) + end.slice(0, 4); };
   const thisMonday = () => localIso(monday(new Date()));
-  const WZ = { step: 1, week: thisMonday(), weeks: 1, from: thisMonday(), to: isoShift(thisMonday(), 6), perWeek: Math.max(1, +S.perWeek || 3), sel: new Set(), msg: '', init: false };
+  const WZ = { step: 1, week: thisMonday(), weeks: 1, from: thisMonday(), to: isoShift(thisMonday(), 6), perWeek: 5, sel: new Set(), msg: '', init: false };
   const stepper = (n) => h('div', { class: 'steps' }, [1, 2, 3].map(i => h('div', { class: 'step' + (i === n ? ' on' : i < n ? ' ok' : '') }, h('b', null, i < n ? '✓' : i), [L('Opty', 'Opps'), L('Kdy a kolik', 'When & how many'), L('Kontrola', 'Review')][i - 1])));
   function wzOpts() {
     const map = new Map();
@@ -237,19 +237,19 @@
       const mondays = []; for (let i = -6; i <= 14; i++) mondays.push(isoShift(thisMonday(), 7 * i));
       const weekSel = sel(mondays.map(m => [m, `${L('Týden', 'Week')} ${isoWeek(m)} · ${weekRange(m, 1)}${m === thisMonday() ? ' ' + L('(tento)', '(this)') : ''}`]), WZ.week, v => { WZ.week = v; syncRange(); renderAll(); }, { style: 'min-width:300px' });
       const nwI = h('input', { type: 'number', min: 1, max: 26, value: WZ.weeks, style: 'width:80px', onchange: e => { WZ.weeks = Math.max(1, Math.min(26, +e.target.value || 1)); e.target.value = WZ.weeks; syncRange(); renderAll(); } });
-      const pwI = h('input', { type: 'number', min: 1, max: 50, value: WZ.perWeek, style: 'width:80px', onchange: e => { WZ.perWeek = Math.max(1, Math.min(50, +e.target.value || 3)); e.target.value = WZ.perWeek; } });
-      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Krok 2 ze 3 · Kdy a kolik tasků', 'Step 2 of 3 · When and how many')),
-        h('div', { class: 'hint' }, L(`Vybráno ${state.worklist.length} opt. Aplikace načte jejich existující tasky a doplní jen to, co chybí do cíle.`, `${state.worklist.length} opps selected. Existing tasks are read and only the missing ones are added.`)),
-        h('div', { class: 'row' }, fld(L('Týden', 'Week'), weekSel), fld(L('Počet týdnů', 'Weeks'), nwI), fld(L('Tasků týdně', 'Tasks / week'), pwI),
+      const pwI = h('input', { type: 'number', min: 1, max: 50, value: WZ.perWeek, style: 'width:80px', onchange: e => { WZ.perWeek = Math.max(1, Math.min(50, +e.target.value || 5)); e.target.value = WZ.perWeek; } });
+      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Krok 2 ze 3 · Kolik tasků a kdy', 'Step 2 of 3 · How many tasks and when')),
+        h('div', { class: 'hint' }, L(`Vybráno ${state.worklist.length} opt. Pro každou se vytvoří zadaný počet nových tasků (bez čtení existujících).`, `${state.worklist.length} opps selected. The given number of new tasks is created for each (existing ones are not read).`)),
+        h('div', { class: 'row' }, fld(L('Týden', 'Week'), weekSel), fld(L('Počet tasků na optu', 'Tasks per opportunity'), pwI),
           fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
         h('div', { style: 'margin-top:10px;font-weight:600' }, '📅 ' + L('Tasky se naplánují od ', 'Tasks will be planned from ') + WZ.from.split('-').reverse().join('.') + L(' do ', ' to ') + WZ.to.split('-').reverse().join('.')),
         WZ.msg ? h('div', { class: 'hint', style: 'color:var(--er);margin-top:8px' }, WZ.msg) : null,
         h('div', { class: 'row', style: 'margin-top:14px;justify-content:space-between' },
           btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 1; renderAll(); }),
-          btn(L('Připravit plán →', 'Prepare plan →'), 'ok big', async () => {
+          btn(L('Připravit tasky →', 'Prepare tasks →'), 'ok big', async () => {
             if (!WZ.from || !WZ.to || WZ.to < WZ.from) { WZ.msg = L('Vyberte týden.', 'Pick a week.'); renderAll(); return; }
-            WZ.msg = ''; S.rangeStart = WZ.from; S.rangeEnd = WZ.to; S.perWeek = WZ.perWeek; saveState();
-            await runScan(); proposalSel.clear(); todo().forEach(p => proposalSel.add(p.id));
+            WZ.msg = ''; proposalSel.clear(); state.worklist.forEach(w => genProposals(w.id, w.name, WZ.perWeek, WZ.week)); saveState();
+            log(L(`Připraveno ${WZ.perWeek} tasků × ${state.worklist.length} opt.`, `Prepared ${WZ.perWeek} tasks × ${state.worklist.length} opps.`));
             WZ.step = 3; renderAll();
           }, { disabled: busy }))));
       if (busy) wrap.append(h('div', { class: 'hint', style: 'text-align:center' }, L('Načítám existující tasky v pomocném okně… neklikejte do něj.', 'Reading existing tasks in the helper window… don’t click in it.')));
@@ -294,28 +294,21 @@
     const t = txt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1'));
     return cleanName(t) || currentRecordId();
   }
+  function genProposals(oppId, name, n, weekMon) {
+    state.proposals = state.proposals.filter(p => p.oppId !== oppId || p.created);
+    const flat = PHASES.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
+    for (let i = 0; i < n; i++) {
+      const f = flat[i % flat.length], date = isoShift(weekMon, (i % 4) + 1);
+      const p = { id: mkId(), oppId, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', manual: true, created: false, error: '' };
+      state.proposals.push(p); proposalSel.add(p.id);
+    }
+  }
   async function recPrepare() {
-    const rid = currentRecordId(); busy = true; renderAll();
-    try {
-      if (!state.worklist.some(x => x.id === rid)) state.worklist.push({ id: rid, name: recName(), account: '', url: PWIN.location.origin + `/lightning/r/Opportunity/${rid}/view`, done: false });
-      setStatus(L('Čtu existující aktivity…', 'Reading existing activities…'));
-      if (RW.read) await processCurrentRecord(); else { state.existing[rid] = { name: (state.worklist.find(x => x.id === rid) || {}).name || rid, tasks: [] }; log(L('Existující tasky se nečtou (vypnuto).', 'Existing tasks not read (disabled).')); }
-      state.proposals = state.proposals.filter(p => p.oppId !== rid);
-      const ex = (state.existing[rid] && state.existing[rid].tasks) || [];
-      let maxRank = -1; ex.forEach(t => { const r = phaseRank(t.subject); if (r > maxRank) maxRank = r; });
-      const flat = PHASES.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
-      let start = flat.findIndex(x => x.phase === PHASES[Math.min(maxRank + 1, PHASES.length - 1)].name); if (start < 0) start = 0;
-      const w = state.worklist.find(x => x.id === rid); const name = (w && w.name) || recName();
-      proposalSel.clear();
-      for (let i = 0; i < RW.n; i++) {
-        const f = flat[(start + i) % flat.length], date = isoShift(RW.week, (i % 4) + 1);
-        const p = { id: mkId(), oppId: rid, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', manual: true, created: false, error: '' };
-        state.proposals.push(p); proposalSel.add(p.id);
-      }
-      RW.ready = true; RW.rid = rid; saveState();
-      setStatus(L(`Existujících tasků: ${ex.length}. Připraveno ${RW.n} nových.`, `Existing tasks: ${ex.length}. ${RW.n} new ones prepared.`));
-    } catch (e) { log(L('CHYBA: ', 'ERROR: ') + e.message); }
-    finally { busy = false; renderAll(); }
+    const rid = currentRecordId();
+    if (!state.worklist.some(x => x.id === rid)) state.worklist.push({ id: rid, name: recName(), account: '', url: PWIN.location.origin + `/lightning/r/Opportunity/${rid}/view`, done: true });
+    proposalSel.clear(); genProposals(rid, (state.worklist.find(x => x.id === rid) || {}).name || recName(), RW.n, RW.week);
+    RW.ready = true; RW.rid = rid; saveState();
+    log(L(`Připraveno ${RW.n} nových tasků (bez čtení existujících).`, `${RW.n} new tasks prepared (existing not read).`)); renderAll();
   }
   function renderRecordSimple() {
     chipsEl.textContent = ''; tabsEl.textContent = '';
@@ -342,8 +335,7 @@
           fld(L('Počet tasků', 'Number of tasks'), nI),
           fld(L('Týden', 'Week'), sel(mondays.map(m => [m, `${L('Týden', 'Week')} ${isoWeek(m)} · ${weekRange(m, 1)}${m === thisMonday() ? ' ' + L('(tento)', '(this)') : ''}`]), RW.week, v => { RW.week = v; }, { style: 'min-width:300px' })),
           fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
-        h('label', { class: 'sw', style: 'margin-top:10px' }, h('input', { type: 'checkbox', checked: RW.read, onchange: e => { RW.read = e.target.checked; renderAll(); } }), L('Přečíst existující tasky v opportunitě (doporučeno)', 'Read existing tasks (recommended)')),
-        h('div', { class: 'hint', style: 'margin-top:4px' }, RW.read ? L('Fáze a typy se navrhnou tak, aby navazovaly na to, co už v opportunitě existuje. Před vytvořením je ještě zkontrolujete.', 'Phases and types continue from what already exists. You can review them before creating.') : L('Návrh začne od fáze Discover. Fáze a typy změníte v řádcích.', 'Plan starts at Discover. Change phases/types in the rows.')),
+        h('div', { class: 'hint', style: 'margin-top:8px' }, L('Vytvoří se nové tasky v pořadí fází Discover → Analyze → Design → Defend. Před vytvořením je zkontrolujete a upravíte.', 'New tasks follow the phases Discover → Analyze → Design → Defend. You can review and edit them before creating.')),
         h('div', { class: 'row', style: 'margin-top:12px;justify-content:flex-end' }, btn(L('Připravit tasky →', 'Prepare tasks →'), 'ok big', () => recPrepare(), { disabled: busy }))));
     } else {
       const nSel = open.filter(p => proposalSel.has(p.id)).length;
