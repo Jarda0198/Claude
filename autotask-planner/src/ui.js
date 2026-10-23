@@ -624,7 +624,7 @@
   /* ---------- start ---------- */
   if (!S.rangeStart) S.rangeStart = localIso(fiscalHalfStart());
   if (!S.rangeEnd) S.rangeEnd = localIso(new Date());
-  if (!S.dateFormat) S.dateFormat = 'auto';
+  if (!S.dateFormat || (S.dateFormat === 'auto' && !S.dfMigrated)) { S.dateFormat = 'DD.MM.YYYY'; S.dfMigrated = true; }
   if (!PRODUCTS.includes(S.product)) S.product = 'PowerStore';
   if (!S.pace) S.pace = '1';
   saveState();
