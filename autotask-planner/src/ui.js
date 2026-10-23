@@ -68,6 +68,12 @@
   #${ID} .seg button:last-child{border:0} #${ID} .seg button.on{background:var(--ac);color:#fff}
   #${ID} .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
   #${ID} .sw{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--tx);cursor:pointer}
+  #${ID} .btn.big{height:40px;font-size:14px;padding:0 22px}
+  #${ID} .steps{display:flex;gap:10px;margin-bottom:14px}
+  #${ID} .step{flex:1;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;color:var(--mu);font-weight:600}
+  #${ID} .step b{width:26px;height:26px;border-radius:50%;background:#e5e9ef;color:var(--tx);display:flex;align-items:center;justify-content:center}
+  #${ID} .step.on{border-color:var(--ac);color:var(--ac)} #${ID} .step.on b{background:var(--ac);color:#fff}
+  #${ID} .step.ok b{background:var(--ok);color:#fff}
   #${ID} .empty{padding:28px;text-align:center;color:var(--mu)}
   `;
   PDOC.head.appendChild(el('style', { textContent: css }));
@@ -115,12 +121,14 @@
 
   /* ---------- kostra panelu ---------- */
   let TAB = 'opty';
+  let VIEW = S.view === 'adv' ? 'adv' : 'simple';
   const panel = el('div', { id: ID });
   const selScan = new Set(), queueSel = new Set(), proposalSel = new Set();
   let scanned = [], busy = false, showCreated = true, filterOpp = '', showExisting = false;
   const chipsEl = h('div', { class: 'at-chips' });
   const langSel = sel([['cs', 'Čeština'], ['en', 'English']], LANG, v => { LANG = v; S.lang = v; saveState(); renderAll(); }, {});
   const miniBtn = h('button', { class: 'at-hbtn', title: L('Zmenšit / zvětšit', 'Minimize / restore'), onclick: () => panel.classList.toggle('mini') }, '▁');
+  const viewBtn = h('button', { class: 'at-hbtn', style: 'font-size:12px;padding:0 10px', onclick: () => { VIEW = VIEW === 'simple' ? 'adv' : 'simple'; S.view = VIEW; saveState(); renderAll(); } });
   const closeBtn = h('button', { class: 'at-hbtn', title: L('Zavřít', 'Close'), onclick: () => { batchRunning = scanRunning = false; panel.remove(); } }, '✕');
   const tabsEl = h('div', { class: 'at-tabs' });
   const mainEl = h('div', { class: 'at-main' });
@@ -128,7 +136,7 @@
   const runBtn = btn('', 'ok', () => runSelected());
   const stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; scanRunning = false; log(L('Zastavuji po dokončení aktuálního kroku…', 'Stopping after the current step…')); });
   panel.append(
-    h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, langSel, miniBtn, closeBtn),
+    h('div', { class: 'at-head' }, h('div', { class: 'at-logo' }, h('i', null, 'AT'), 'AutoTask Planner'), chipsEl, viewBtn, langSel, miniBtn, closeBtn),
     tabsEl, mainEl,
     h('div', { class: 'at-foot' }, h('div', { class: 'at-prog' }, progBar), h('div', { class: 'at-frow' }, statEl, stopBtn, runBtn), logEl)
   );
@@ -137,7 +145,7 @@
   const log = (s) => { logEl.textContent += (logEl.textContent ? '\n' : '') + s; logEl.scrollTop = logEl.scrollHeight; };
   const setStatus = (s) => { statEl.textContent = s; statEl.title = s; };
   onProgress = (i, n) => { progBar.style.width = Math.round(100 * i / Math.max(1, n)) + '%'; };
-  function gotoTab(t) { TAB = t; renderAll(); }
+  function gotoTab(t) { if (VIEW === 'simple') { if (t === 'plan' && WZ.step === 2) WZ.step = 3; renderAll(); return; } TAB = t; renderAll(); }
   function renderQueue() { renderAll(); }
   function renderProposalsTable() { renderAll(); }
   function scopedProposals() { const ids = new Set(state.worklist.map(w => w.id)); return state.proposals.filter(p => ids.has(p.oppId)); }
@@ -145,6 +153,11 @@
 
   /* ---------- hlavní render ---------- */
   function renderAll() {
+    viewBtn.textContent = VIEW === 'simple' ? L('⚙ Pokročilý režim', '⚙ Advanced mode') : L('✨ Jednoduchý režim', '✨ Simple mode');
+    stopBtn.style.display = (busy || VIEW === 'adv') ? '' : 'none';
+    mainEl.textContent = '';
+    if (VIEW === 'simple') { renderSimple(); modeHint(); return; }
+    runBtn.style.display = '';
     const pr = scopedProposals();
     const created = pr.filter(p => p.created).length;
     chipsEl.textContent = '';
@@ -156,7 +169,6 @@
     tabsEl.textContent = '';
     [['opty', '① ' + L('Opportunities', 'Opportunities'), state.worklist.length], ['plan', '② ' + L('Plán tasků', 'Task plan'), pr.length - created], ['set', '③ ' + L('Nastavení', 'Settings'), null]].forEach(([k, t, n]) =>
       tabsEl.append(h('button', { class: 'at-tab' + (TAB === k ? ' on' : ''), onclick: () => gotoTab(k) }, t, n != null ? h('span', { class: 'n' }, n) : null)));
-    mainEl.textContent = '';
     ({ opty: tabOpty, plan: tabPlan, set: tabSettings })[TAB]();
     const n = pr.filter(p => !p.created && proposalSel.has(p.id)).length;
     runBtn.textContent = L(`▶ Vytvořit vybrané (${n})`, `▶ Create selected (${n})`);
@@ -164,6 +176,99 @@
     modeHint();
   }
   function modeHint() { if (mode() === 'other' && !statEl.textContent) setStatus(L('Otevřete seznam Opportunities (/lightning/o/Opportunity/list) a spusťte nástroj tam.', 'Open the Opportunities list and launch the tool there.')); }
+
+  /* ---------- JEDNODUCHÝ REŽIM (průvodce ve 3 krocích) ---------- */
+  const todayIso = () => localIso(new Date());
+  const WZ = { step: 1, from: todayIso(), to: isoShift(todayIso(), 13), perWeek: Math.max(1, +S.perWeek || 3), sel: new Set(), msg: '', init: false };
+  const stepper = (n) => h('div', { class: 'steps' }, [1, 2, 3].map(i => h('div', { class: 'step' + (i === n ? ' on' : i < n ? ' ok' : '') }, h('b', null, i < n ? '✓' : i), [L('Opty', 'Opps'), L('Kdy a kolik', 'When & how many'), L('Kontrola', 'Review')][i - 1])));
+  function wzOpts() {
+    const map = new Map();
+    state.worklist.forEach(w => map.set(w.id, w));
+    scanned.forEach(o => { if (!map.has(o.id)) map.set(o.id, { id: o.id, name: cleanName(o.name), account: o.account, created: o.created, stage: o.stage, url: o.url, done: false }); });
+    return [...map.values()];
+  }
+  function renderSimple() {
+    chipsEl.textContent = ''; tabsEl.textContent = '';
+    const st = WZ.step;
+    const wrap = h('div', { style: 'max-width:1000px;margin:0 auto' }, stepper(st));
+    if (st === 1) {
+      const opts = wzOpts();
+      if (!WZ.init) { state.worklist.forEach(w => WZ.sel.add(w.id)); WZ.init = true; }
+      const c = h('div', { class: 'card' }, h('h3', null, L('Krok 1 ze 3 · Vyberte opportunities', 'Step 1 of 3 · Pick opportunities')));
+      if (mode() !== 'list') c.append(h('div', { class: 'hint' }, L('Otevřete seznam Opportunities a spusťte nástroj tam.', 'Open the Opportunities list and launch the tool there.')));
+      c.append(h('div', { class: 'row', style: 'margin-bottom:10px' },
+        btn(L('🔍 Načíst opty ze seznamu', '🔍 Load opps from the list'), '', () => {
+          scanned = scanList().filter(o => o.probability == null ? true : o.probability >= (+S.minProb || 0));
+          scanned.forEach(o => { if (!state.worklist.some(w => w.id === o.id)) WZ.sel.add(o.id); });
+          setStatus(L(`Nalezeno ${scanned.length} opt. Seznam je virtuální – posuňte ho a načtěte znovu pro další.`, `Found ${scanned.length} opps. The list is virtual – scroll and load again for more.`)); renderAll();
+        }, { disabled: mode() !== 'list' })));
+      if (!opts.length) c.append(h('div', { class: 'empty' }, L('Klikněte na „Načíst opty ze seznamu“.', 'Click “Load opps from the list”.')));
+      else {
+        c.append(h('div', { class: 'tw', style: 'max-height:45vh' }, h('table', null,
+          h('thead', null, h('tr', null, h('th'), h('th', null, 'Opportunity'), h('th', null, 'Account'), h('th', null, 'Stage'))),
+          h('tbody', null, opts.map(o => h('tr', null,
+            h('td', null, h('input', { type: 'checkbox', checked: WZ.sel.has(o.id), onchange: e => { e.target.checked ? WZ.sel.add(o.id) : WZ.sel.delete(o.id); renderAll(); } })),
+            h('td', null, h('b', null, o.name)), h('td', { class: 'mu' }, o.account || '—'), h('td', null, o.stage || '—')))))));
+      }
+      c.append(h('div', { class: 'row', style: 'margin-top:12px;justify-content:flex-end' },
+        h('span', { class: 'mu', style: 'align-self:center' }, L(`Vybráno: ${WZ.sel.size}`, `Selected: ${WZ.sel.size}`)),
+        btn(L('Pokračovat →', 'Continue →'), 'ok big', () => {
+          const prev = new Map(state.worklist.map(w => [w.id, w]));
+          state.worklist = wzOpts().filter(o => WZ.sel.has(o.id)).map(o => prev.get(o.id) || o);
+          saveState(); WZ.step = 2; renderAll();
+        }, { disabled: !WZ.sel.size })));
+      wrap.append(c);
+    } else if (st === 2) {
+      const fromI = h('input', { type: 'date', value: WZ.from, onchange: e => { WZ.from = e.target.value; } });
+      const toI = h('input', { type: 'date', value: WZ.to, onchange: e => { WZ.to = e.target.value; } });
+      const pwI = h('input', { type: 'number', min: 1, max: 50, value: WZ.perWeek, style: 'width:80px', onchange: e => { WZ.perWeek = Math.max(1, Math.min(50, +e.target.value || 3)); e.target.value = WZ.perWeek; } });
+      wrap.append(h('div', { class: 'card' }, h('h3', null, L('Krok 2 ze 3 · Kdy a kolik tasků', 'Step 2 of 3 · When and how many')),
+        h('div', { class: 'hint' }, L(`Vybráno ${state.worklist.length} opt. Aplikace načte jejich existující tasky a doplní jen to, co chybí do cíle.`, `${state.worklist.length} opps selected. Existing tasks are read and only the missing ones are added.`)),
+        h('div', { class: 'row' }, fld(L('Tasky od', 'Tasks from'), fromI), fld(L('Tasky do', 'Tasks to'), toI), fld(L('Tasků týdně', 'Tasks / week'), pwI),
+          fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
+        WZ.msg ? h('div', { class: 'hint', style: 'color:var(--er);margin-top:8px' }, WZ.msg) : null,
+        h('div', { class: 'row', style: 'margin-top:14px;justify-content:space-between' },
+          btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 1; renderAll(); }),
+          btn(L('Připravit plán →', 'Prepare plan →'), 'ok big', async () => {
+            if (!WZ.from || !WZ.to || WZ.to < WZ.from) { WZ.msg = L('Zkontrolujte datumy – „do“ nesmí být před „od“.', 'Check dates – “to” must not be before “from”.'); renderAll(); return; }
+            WZ.msg = ''; S.rangeStart = WZ.from; S.rangeEnd = WZ.to; S.perWeek = WZ.perWeek; saveState();
+            await runScan(); proposalSel.clear(); todo().forEach(p => proposalSel.add(p.id));
+            WZ.step = 3; renderAll();
+          }, { disabled: busy }))));
+      if (busy) wrap.append(h('div', { class: 'hint', style: 'text-align:center' }, L('Načítám existující tasky v pomocném okně… neklikejte do něj.', 'Reading existing tasks in the helper window… don’t click in it.')));
+    } else {
+      const all = scopedProposals().sort((a, b) => (a.oppName + a.date).localeCompare(b.oppName + b.date));
+      const open = all.filter(p => !p.created), done = all.filter(p => p.created);
+      const nSel = open.filter(p => proposalSel.has(p.id)).length;
+      const c = h('div', { class: 'card' }, h('h3', null, L('Krok 3 ze 3 · Zkontrolujte a vytvořte', 'Step 3 of 3 · Review and create'), h('span', { class: 'sub' }, `${WZ.from} → ${WZ.to}`)));
+      if (done.length && !open.length) {
+        c.append(h('div', { class: 'empty' }, h('div', { style: 'font-size:34px' }, '✅'), h('b', null, L(`Hotovo – vytvořeno ${done.length} tasků.`, `Done – ${done.length} tasks created.`))),
+          h('div', { class: 'row', style: 'justify-content:center' }, btn(L('Začít znovu', 'Start over'), '', () => { state.proposals = state.proposals.filter(p => !p.created); saveState(); WZ.step = 1; WZ.init = false; WZ.sel.clear(); renderAll(); })));
+      } else if (!open.length) {
+        c.append(h('div', { class: 'empty' }, L('Pro zvolené období není co doplnit (cíl je splněn) nebo se tasky nenačetly.', 'Nothing to add for this period (target met) or tasks failed to load.')), h('div', { class: 'row', style: 'justify-content:center' }, btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 2; renderAll(); })));
+      } else {
+        const head = h('input', { type: 'checkbox', checked: nSel === open.length, onchange: e => { open.forEach(p => e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id)); renderAll(); } });
+        c.append(h('div', { class: 'hint' }, L('Zrušte zaškrtnutí u tasků, které nechcete. Datum, předmět a produkt můžete přepsat přímo v řádku.', 'Untick tasks you don’t want. Date, subject and product can be edited inline.')),
+          h('div', { class: 'tw', style: 'max-height:42vh' }, h('table', null,
+            h('thead', null, h('tr', null, h('th', null, head), h('th', null, 'Opportunity'), h('th', null, L('Datum', 'Date')), h('th', null, L('Předmět', 'Subject')), h('th', null, 'Product'), h('th'))),
+            h('tbody', null, open.map(p => h('tr', { class: p.error ? 'err' : '' },
+              h('td', null, h('input', { type: 'checkbox', checked: proposalSel.has(p.id), onchange: e => { e.target.checked ? proposalSel.add(p.id) : proposalSel.delete(p.id); renderAll(); } })),
+              h('td', { style: 'min-width:140px' }, h('b', null, p.oppName)),
+              h('td', { style: 'min-width:128px' }, h('input', { type: 'date', value: p.date, onchange: e => { if (e.target.value) setP(p, { date: e.target.value }); } })),
+              h('td', { style: 'min-width:220px' }, h('input', { type: 'text', value: p.subject, title: p.error || '', oninput: e => { p.subject = e.target.value; p.customSubject = true; saveState(); } })),
+              h('td', { style: 'min-width:140px' }, sel(PRODUCTS, p.product, v => { p.product = v; saveState(); })),
+              h('td', null, btn('✕', 'ico', () => { state.proposals = state.proposals.filter(x => x.id !== p.id); proposalSel.delete(p.id); saveState(); renderAll(); }, { title: L('Odebrat', 'Remove') }))))))),
+          h('div', { class: 'row', style: 'margin-top:12px;justify-content:space-between' },
+            h('div', { class: 'row' }, btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 2; renderAll(); }),
+              h('label', { class: 'sw', style: 'height:32px' }, h('input', { type: 'checkbox', checked: !!S.autosave, onchange: e => { S.autosave = e.target.checked; saveState(); renderAll(); } }), L('Ukládat automaticky (Save)', 'Save automatically'))),
+            btn(L(`▶ Vytvořit ${nSel} tasků`, `▶ Create ${nSel} tasks`), 'ok big', () => runSelected(), { disabled: !nSel || busy })));
+        if (!S.autosave) c.append(h('div', { class: 'hint' }, L('Automatické ukládání je vypnuté – u každého tasku sami zkontrolujete formulář a kliknete na Save.', 'Auto-save is off – review each form and click Save yourself.')));
+      }
+      wrap.append(c);
+    }
+    mainEl.append(wrap);
+    runBtn.style.display = 'none';
+  }
 
   /* ---------- ① OPPORTUNITIES ---------- */
   function tabOpty() {

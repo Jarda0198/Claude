@@ -12,6 +12,10 @@ Běží jako bookmarklet, takže pracuje v přihlášené session; nic se neodes
 * **Rychlejší vyplňování** – režim Turbo, rychlejší kontrola data, automatické jedno opakování při chybě, vytvořené tasky se označí a už se nevytvářejí znovu.
 * Čeština (výchozí) + angličtina.
 
+## Jednoduchý režim (výchozí)
+Průvodce ve 3 krocích: **1) vyberte opty → 2) zadejte období a počet tasků → 3) zkontrolujte a vytvořte**.
+Pokročilé funkce (hromadné úpravy, přehled týdnů, vlastní tasky, nastavení) jsou za tlačítkem **⚙ Pokročilý režim** v záhlaví.
+
 ## Instalace
 1. Z `dist/` naimportujte `autotask-bookmarks.html` do záložek prohlížeče (nebo vytvořte záložku s URL z `dist/bookmarklet.txt`).
 2. Starou záložku „AutoTask Planner“ nejdřív smažte.
