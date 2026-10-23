@@ -324,7 +324,11 @@
 
   /* ---------- JEDNODUCHÝ REŽIM (průvodce ve 3 krocích) ---------- */
   const todayIso = () => localIso(new Date());
-  const WZ = { step: 1, from: todayIso(), to: isoShift(todayIso(), 13), perWeek: Math.max(1, +S.perWeek || 3), sel: new Set(), msg: '', init: false };
+  const isoWeek = (iso) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const w1 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7); };
+  const dm = (iso) => { const [y, m, d] = iso.split('-'); return +d + '.' + +m + '.'; };
+  const weekRange = (mon, n) => { const end = isoShift(mon, 7 * n - 1); return dm(mon) + ' – ' + dm(end) + end.slice(0, 4); };
+  const thisMonday = () => localIso(monday(new Date()));
+  const WZ = { step: 1, week: thisMonday(), weeks: 1, from: thisMonday(), to: isoShift(thisMonday(), 6), perWeek: Math.max(1, +S.perWeek || 3), sel: new Set(), msg: '', init: false };
   const stepper = (n) => h('div', { class: 'steps' }, [1, 2, 3].map(i => h('div', { class: 'step' + (i === n ? ' on' : i < n ? ' ok' : '') }, h('b', null, i < n ? '✓' : i), [L('Opty', 'Opps'), L('Kdy a kolik', 'When & how many'), L('Kontrola', 'Review')][i - 1])));
   function wzOpts() {
     const map = new Map();
@@ -364,18 +368,22 @@
         }, { disabled: !WZ.sel.size })));
       wrap.append(c);
     } else if (st === 2) {
-      const fromI = h('input', { type: 'date', value: WZ.from, onchange: e => { WZ.from = e.target.value; } });
-      const toI = h('input', { type: 'date', value: WZ.to, onchange: e => { WZ.to = e.target.value; } });
+      const syncRange = () => { WZ.from = WZ.week; WZ.to = isoShift(WZ.week, 7 * WZ.weeks - 1); };
+      syncRange();
+      const mondays = []; for (let i = -6; i <= 14; i++) mondays.push(isoShift(thisMonday(), 7 * i));
+      const weekSel = sel(mondays.map(m => [m, `${L('Týden', 'Week')} ${isoWeek(m)} · ${weekRange(m, 1)}${m === thisMonday() ? ' ' + L('(tento)', '(this)') : ''}`]), WZ.week, v => { WZ.week = v; syncRange(); renderAll(); }, { style: 'min-width:300px' });
+      const nwI = h('input', { type: 'number', min: 1, max: 26, value: WZ.weeks, style: 'width:80px', onchange: e => { WZ.weeks = Math.max(1, Math.min(26, +e.target.value || 1)); e.target.value = WZ.weeks; syncRange(); renderAll(); } });
       const pwI = h('input', { type: 'number', min: 1, max: 50, value: WZ.perWeek, style: 'width:80px', onchange: e => { WZ.perWeek = Math.max(1, Math.min(50, +e.target.value || 3)); e.target.value = WZ.perWeek; } });
       wrap.append(h('div', { class: 'card' }, h('h3', null, L('Krok 2 ze 3 · Kdy a kolik tasků', 'Step 2 of 3 · When and how many')),
         h('div', { class: 'hint' }, L(`Vybráno ${state.worklist.length} opt. Aplikace načte jejich existující tasky a doplní jen to, co chybí do cíle.`, `${state.worklist.length} opps selected. Existing tasks are read and only the missing ones are added.`)),
-        h('div', { class: 'row' }, fld(L('Tasky od', 'Tasks from'), fromI), fld(L('Tasky do', 'Tasks to'), toI), fld(L('Tasků týdně', 'Tasks / week'), pwI),
+        h('div', { class: 'row' }, fld(L('Týden', 'Week'), weekSel), fld(L('Počet týdnů', 'Weeks'), nwI), fld(L('Tasků týdně', 'Tasks / week'), pwI),
           fld('Product', sel(PRODUCTS, S.product, v => { S.product = v; saveState(); })), fld('Audience', sel(AUDIENCES, S.audience, v => { S.audience = v; saveState(); }))),
+        h('div', { style: 'margin-top:10px;font-weight:600' }, '📅 ' + L('Tasky se naplánují od ', 'Tasks will be planned from ') + WZ.from.split('-').reverse().join('.') + L(' do ', ' to ') + WZ.to.split('-').reverse().join('.')),
         WZ.msg ? h('div', { class: 'hint', style: 'color:var(--er);margin-top:8px' }, WZ.msg) : null,
         h('div', { class: 'row', style: 'margin-top:14px;justify-content:space-between' },
           btn(L('← Zpět', '← Back'), 'sec', () => { WZ.step = 1; renderAll(); }),
           btn(L('Připravit plán →', 'Prepare plan →'), 'ok big', async () => {
-            if (!WZ.from || !WZ.to || WZ.to < WZ.from) { WZ.msg = L('Zkontrolujte datumy – „do“ nesmí být před „od“.', 'Check dates – “to” must not be before “from”.'); renderAll(); return; }
+            if (!WZ.from || !WZ.to || WZ.to < WZ.from) { WZ.msg = L('Vyberte týden.', 'Pick a week.'); renderAll(); return; }
             WZ.msg = ''; S.rangeStart = WZ.from; S.rangeEnd = WZ.to; S.perWeek = WZ.perWeek; saveState();
             await runScan(); proposalSel.clear(); todo().forEach(p => proposalSel.add(p.id));
             WZ.step = 3; renderAll();
@@ -385,7 +393,7 @@
       const all = scopedProposals().sort((a, b) => (a.oppName + a.date).localeCompare(b.oppName + b.date));
       const open = all.filter(p => !p.created), done = all.filter(p => p.created);
       const nSel = open.filter(p => proposalSel.has(p.id)).length;
-      const c = h('div', { class: 'card' }, h('h3', null, L('Krok 3 ze 3 · Zkontrolujte a vytvořte', 'Step 3 of 3 · Review and create'), h('span', { class: 'sub' }, `${WZ.from} → ${WZ.to}`)));
+      const c = h('div', { class: 'card' }, h('h3', null, L('Krok 3 ze 3 · Zkontrolujte a vytvořte', 'Step 3 of 3 · Review and create'), h('span', { class: 'sub' }, `${L('Týden', 'Week')} ${isoWeek(WZ.from)} · ${weekRange(WZ.from, WZ.weeks)}`)));
       if (done.length && !open.length) {
         c.append(h('div', { class: 'empty' }, h('div', { style: 'font-size:34px' }, '✅'), h('b', null, L(`Hotovo – vytvořeno ${done.length} tasků.`, `Done – ${done.length} tasks created.`))),
           h('div', { class: 'row', style: 'justify-content:center' }, btn(L('Začít znovu', 'Start over'), '', () => { state.proposals = state.proposals.filter(p => !p.created); saveState(); WZ.step = 1; WZ.init = false; WZ.sel.clear(); renderAll(); })));

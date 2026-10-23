@@ -13,7 +13,7 @@ Běží jako bookmarklet, takže pracuje v přihlášené session; nic se neodes
 * Čeština (výchozí) + angličtina.
 
 ## Jednoduchý režim (výchozí)
-Průvodce ve 3 krocích: **1) vyberte opty → 2) zadejte období a počet tasků → 3) zkontrolujte a vytvořte**.
+Průvodce ve 3 krocích: **1) vyberte opty → 2) vyberte týden a počet tasků → 3) zkontrolujte a vytvořte**.
 Pokročilé funkce (hromadné úpravy, přehled týdnů, vlastní tasky, nastavení) jsou za tlačítkem **⚙ Pokročilý režim** v záhlaví.
 
 ## Instalace
