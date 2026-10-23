@@ -88,6 +88,26 @@
   #${ID} details.bulkd>summary{cursor:pointer;font-weight:700;padding:4px 0}
   #${ID} .donel{margin:0;padding-left:18px;color:#3f6b4b}
   #${ID} .logpanel{margin-top:4px}
+  /* ===== svislé rozložení: vše pod sebou v jednom sloupci ===== */
+  #${ID} .at-main{max-width:820px;width:100%;margin:0 auto}
+  #${ID} .row{flex-direction:column;align-items:stretch;gap:12px}
+  #${ID} .row>*{width:100%;max-width:100%}
+  #${ID} .row .btn{width:100%;height:40px;font-size:14px}
+  #${ID} .row .btn.ico{width:28px;height:28px}
+  #${ID} .row .sw{width:auto}
+  #${ID} .thead .row{flex-direction:row;width:auto;gap:6px}
+  #${ID} .thead .row>*{width:auto}
+  #${ID} .thead .row .btn{width:auto;height:30px;font-size:12px}
+  #${ID} .fld{width:100%}
+  #${ID} .fld select,#${ID} .fld input[type=text],#${ID} .fld input[type=date],#${ID} .fld input[type=number]{width:100%!important;min-width:0!important;height:38px;font-size:14px}
+  #${ID} .tgrid,#${ID} .grid2{grid-template-columns:1fr}
+  #${ID} .steps{flex-direction:column;gap:6px}
+  #${ID} .step{padding:8px 12px}
+  #${ID} .at-head{flex-wrap:wrap} #${ID} .at-frow{flex-wrap:wrap}
+  #${ID} .at-stat{flex-basis:100%;white-space:normal}
+  #${ID} .bulk .row{flex-direction:column}
+  #${ID} .week{max-width:100%}
+  #${ID} .tw{max-width:100%}
   #${ID} .empty{padding:28px;text-align:center;color:var(--mu)}
   `;
   PDOC.head.appendChild(el('style', { textContent: css }));
@@ -256,7 +276,7 @@
     chipsEl.textContent = ''; tabsEl.textContent = '';
     if (mode() === 'record') { renderRecordSimple(); return; }
     const st = WZ.step;
-    const wrap = h('div', { style: 'max-width:960px;margin:0 auto' }, stepper(st));
+    const wrap = h('div', { style: 'max-width:820px;margin:0 auto' }, stepper(st));
     if (st === 1) {
       const opts = wzOpts();
       if (!WZ.init) { state.worklist.forEach(w => WZ.sel.add(w.id)); WZ.init = true; }
@@ -364,7 +384,7 @@
     chipsEl.textContent = ''; tabsEl.textContent = '';
     const rid = currentRecordId();
     if (RW.rid !== rid) { RW.ready = false; RW.rid = rid; }
-    const wrap = h('div', { style: 'max-width:960px;margin:0 auto' });
+    const wrap = h('div', { style: 'max-width:820px;margin:0 auto' });
     if (/\/related\//.test(PWIN.location.pathname)) {
       wrap.append(h('div', { class: 'card' }, h('h3', null, L('Jste na vedlejší záložce opty', 'You are on a related list')),
         h('div', { class: 'hint' }, L('Formulář tasku je na hlavní stránce opty (sekce Activity). Otevřete ji tlačítkem níže a nástroj pak bude pokračovat.', 'The task form is on the main opportunity page (Activity section). Open it with the button below.')),
@@ -630,7 +650,7 @@
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
-  log('AutoTask Planner v2.7 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
+  log('AutoTask Planner v2.8 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);
