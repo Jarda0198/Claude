@@ -13,7 +13,7 @@ Běží jako bookmarklet, takže pracuje v přihlášené session; nic se neodes
 * Čeština (výchozí) + angličtina.
 
 ## Jednoduchý režim (výchozí)
-Průvodce ve 3 krocích: **1) vyberte opty → 2) vyberte týden a počet tasků na optu → 3) zkontrolujte a vytvořte**. Existující tasky se nečtou, vytváří se jen nové..
+Průvodce ve 3 krocích: **1) vyberte opty → 2) vyberte týden a počet tasků na optu → 3) zkontrolujte a vytvořte**. Existující tasky se čtou jen když je zapnuto „Přečíst existující tasky“ (výchozí): doplní se jen chybějící a fáze navážou. Vypnutím se prostě vytvoří zadaný počet nových tasků..
 Pokročilé funkce (hromadné úpravy, přehled týdnů, vlastní tasky, nastavení) jsou za tlačítkem **⚙ Pokročilý režim** v záhlaví.
 
 ## Rychlá varianta: jedna opportunita → N tasků
