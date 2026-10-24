@@ -254,6 +254,7 @@ function __atFatal(e){
   const fld = (label, control, cls) => h('label', { class: 'f ' + (cls || '') }, label, control);
   const btn = (t, cls, fn, p) => h('button', Object.assign({ class: 'btn ' + (cls || ''), onclick: fn, type: 'button' }, p || {}), t);
   const todayIso = () => localIso(new Date());
+  const taskWord = (n) => n === 1 ? 'task' : (n >= 2 && n <= 4) ? 'tasky' : 'tasků';
   const typesFor = (cat) => { const ph = PHASES.find(x => x.name === cat); return ph ? ph.types : []; };
   const autoSubject = (p) => p.phase + ' - ' + p.type;
 
@@ -269,11 +270,12 @@ function __atFatal(e){
   const body = h('div', { class: 'body' }, oppEl, infoEl, listEl, addRow);
   const statEl = h('div', { class: 'st', 'aria-live': 'polite' }), progBar = h('div'), logEl = h('div', { class: 'logbox', style: 'display:none' });
   const runBtn = btn('', 'ok', () => run()), stopBtn = btn('■ Stop', 'bad', () => { batchRunning = false; log('Zastavuji po dokončení aktuálního kroku…'); }, { style: 'display:none' });
+  const fastCb = h('input', { type: 'checkbox', checked: String(S.pace) === '0.6', onchange: e => { S.pace = e.target.checked ? '0.6' : '1'; PACE = +S.pace; saveState(); } });
   const logBtn = btn('Log', 'sec sm', () => { const o = logEl.style.display === 'none'; logEl.style.display = o ? '' : 'none'; if (o) logEl.scrollTop = logEl.scrollHeight; });
   const copyBtn = btn('Kopírovat log', 'sec sm', () => { const t = fullLog(); try { navigator.clipboard.writeText(t); setStatus('Log zkopírován do schránky.'); } catch (e) { const ta = h('textarea', { value: t }); PDOC.body.append(ta); ta.select(); PDOC.execCommand('copy'); ta.remove(); } });
   const closeBtn = h('button', { 'aria-label': 'Zavřít', title: 'Zavřít', class: 'x', onclick: () => { batchRunning = false; panel.remove(); } }, '✕');
   panel.append(h('div', { class: 'hd' }, h('b', null, 'AutoTask'), h('span', { class: 'sp' }), closeBtn),
-    body, h('div', { class: 'ft' }, h('div', { class: 'prog' }, progBar), statEl, h('div', { class: 'row2' }, runBtn, stopBtn), h('div', { class: 'row2' }, logBtn, copyBtn), logEl));
+    body, h('div', { class: 'ft' }, h('div', { class: 'prog' }, progBar), statEl, h('div', { class: 'row2' }, runBtn, stopBtn), h('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer' }, fastCb, 'Rychlejší vyplňování (méně pauz; když něco nevyjde, vypněte)'), h('div', { class: 'row2' }, logBtn, copyBtn), logEl));
   PDOC.body.append(panel);
 
   const log = (s) => { const line = '[' + stamp() + '] ' + s; logEl.textContent += (logEl.textContent ? '\n' : '') + line; logEl.scrollTop = logEl.scrollHeight; persist(line); try { console.log('[AutoTask]', s); } catch (e) {} if (/CHYBA|ERROR|selhal|nelze potvrdit/i.test(s)) logEl.style.display = ''; };
@@ -310,7 +312,8 @@ function __atFatal(e){
   const newRow = (from) => {
     const base = from ? { phase: from.phase, type: from.type, product: from.product, audience: from.audience, date: from.date } : { phase: 'Discover', type: 'Requirements Gathering', product: detected[0] || '', audience: S.audience, date: todayIso() };
     const p = Object.assign({ id: mkId(), oppId: rid, oppName: oppName(), status: 'Completed', priority: 'Normal', created: false, error: '', customSubject: false }, base);
-    p.subject = autoSubject(p); return p;
+    if (from) { p.subject = ''; p.customSubject = true; } else p.subject = autoSubject(p);
+    return p;
   };
   function resetFor(id) { rid = id; rows = [newRow()]; }
 
@@ -331,13 +334,13 @@ function __atFatal(e){
     rows.forEach((p, i) => listEl.append(card(p, i)));
     addRow.append(btn('＋ Přidat další task', 'sec', () => { const last = rows[rows.length - 1]; rows.push(newRow(last)); render(); setTimeout(() => { const ins = listEl.querySelectorAll('input[type=text]'); if (ins.length) ins[ins.length - 1].focus(); }, 30); }, { style: 'width:100%' }));
     const open = rows.filter(p => !p.created).length;
-    runBtn.textContent = open ? `▶ Vytvořit ${open} ${open === 1 ? 'task' : open < 5 ? 'tasky' : 'tasků'}` : 'Hotovo';
+    runBtn.textContent = open ? `▶ Vytvořit ${open} ${taskWord(open)}` : 'Hotovo';
     runBtn.disabled = busy || !open; if (busy) runBtn.style.display = 'none';
   }
 
   function card(p, i) {
     const miss = missingFields(p);
-    const subj = h('input', { type: 'text', value: p.subject, disabled: p.created, 'aria-label': 'Název tasku', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); } });
+    const subj = h('input', { type: 'text', value: p.subject, disabled: p.created, placeholder: 'Zadejte název tasku', 'aria-label': 'Název tasku', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); } });
     const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } }, { disabled: p.created });
     const phSel = sel(PHASES.map(x => x.name), p.phase, v => { p.phase = v; tySel.textContent = ''; typesFor(v).forEach(t => tySel.append(h('option', { value: t }, t))); p.type = typesFor(v)[0]; tySel.value = p.type; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } }, { disabled: p.created });
     const prodSel = sel([['', '— vyberte —'], ...productOptions()], p.product, v => { p.product = v; }, { disabled: p.created });
@@ -358,10 +361,11 @@ function __atFatal(e){
     if (busy) return;
     const chosen = rows.filter(p => !p.created);
     const bad = chosen.filter(p => missingFields(p).length);
-    if (bad.length) { bad.forEach(p => { p.error = 'Chybí: ' + missingFields(p).join(', '); }); render(); setStatus('Doplňte označená pole.'); return; }
+    const CZ = { Subject: 'Název tasku', 'Due Date': 'Datum', Status: 'Status', Category: 'Kategorie', 'Task Type': 'Typ tasku', Audience: 'Audience', Product: 'Product', Priority: 'Priority' };
+    if (bad.length) { bad.forEach(p => { p.error = 'Chybí: ' + missingFields(p).map(x => CZ[x] || x).join(', '); }); render(); setStatus('Doplňte označená pole.'); return; }
     chosen.forEach(p => { p.error = ''; p.oppName = oppName(); p.oppId = rid; });
     busy = true; panel.classList.add('run'); stopBtn.style.display = ''; runBtn.style.display = 'none'; progBar.style.width = '0'; render();
-    log('Vytvářím ' + chosen.length + ' tasků…');
+    log('Vytvářím ' + chosen.length + ' ' + taskWord(chosen.length) + '…');
     try { await fillSelected(chosen.slice(), true, log, setStatus); }
     catch (e) { log('CHYBA: ' + e.message); }
     finally { busy = false; panel.classList.remove('run'); stopBtn.style.display = 'none'; runBtn.style.display = ''; render(); }
@@ -370,7 +374,7 @@ function __atFatal(e){
   /* ---------- start ---------- */
   let detTries = 0;
   function retryDetect() { detTries = 0; const t = setInterval(() => { if (!PDOC.body.contains(panel) || ++detTries > 5 || detected.length) { clearInterval(t); return; } const before = detected.join(); detectProducts(); if (detected.join() !== before) { rows.filter(p => !p.created && !p.product).forEach(p => p.product = detected[0] || ''); if (!busy) render(); } }, 2500); }
-  log('AutoTask jednoduchý v3.0 (2026-10-24) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.1 (2026-10-24) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
