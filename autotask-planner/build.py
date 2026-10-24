@@ -2,8 +2,12 @@
 """Sestaví dist/autotask-core.js, dist/bookmarklet.txt a dist/autotask-bookmarks.html ze src/."""
 import os, urllib.parse
 here=os.path.dirname(os.path.abspath(__file__))
+import sys
+VARIANT=sys.argv[1] if len(sys.argv)>1 else 'simple'
+UIFILE='ui-full.js' if VARIANT=='full' else 'ui-simple.js'
+DISTNAME='dist-full' if VARIANT=='full' else 'dist'
 rd=lambda f: open(os.path.join(here,'src',f),encoding='utf8').read()
-core=rd('engine.js')+rd('ui.js')
+core=rd('engine.js')+rd(UIFILE)
 FATAL = r"""
 function __atFatal(e){
   try{ console.error('[AutoTask] FATAL', e); }catch(_){}
@@ -22,19 +26,19 @@ function __atFatal(e){
 """
 
 head="/* AutoTask Planner v2 (DOM-only, bez Salesforce API). Panel žije v okně Opportunities; skenování a vyplňování běží v jednom pomocném okně (same-origin). */\n"
-os.makedirs(os.path.join(here,'dist'),exist_ok=True)
+os.makedirs(os.path.join(here,DISTNAME),exist_ok=True)
 wrapped=head+FATAL+'(async () => { try { await '+core[core.index('(async () => {'):].rstrip()[:-1]+'; } catch (e) { __atFatal(e); } })();\n'
-open(os.path.join(here,'dist','autotask-core.js'),'w',encoding='utf8').write(wrapped)
+open(os.path.join(here,DISTNAME,'autotask-core.js'),'w',encoding='utf8').write(wrapped)
 url='javascript:'+urllib.parse.quote(wrapped,safe="()!~*'")
-open(os.path.join(here,'dist','bookmarklet.txt'),'w',encoding='utf8').write(url)
-open(os.path.join(here,'dist','autotask-bookmarks.html'),'w',encoding='utf8').write(
+open(os.path.join(here,DISTNAME,'bookmarklet.txt'),'w',encoding='utf8').write(url)
+open(os.path.join(here,DISTNAME,'autotask-bookmarks.html'),'w',encoding='utf8').write(
  '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><A HREF="%s">AutoTask Planner</A>\n</DL><p>\n'%url)
 print('core',len(wrapped),'bookmarklet',len(url))
 
 
 # ---------- rozšíření pro Chrome (Manifest V3) ----------
 import json, struct, zlib, shutil
-ext=os.path.join(here,'dist','extension')
+ext=os.path.join(here,DISTNAME,'extension')
 shutil.rmtree(ext,ignore_errors=True); os.makedirs(ext)
 body=core.rstrip()
 i0=body.index('(async () => {'); assert body.endswith('})();')
@@ -81,21 +85,21 @@ print('extension built')
 # ---------- krátké varianty bookmarkletu (minifikace + gzip) ----------
 import subprocess, gzip, base64, re as _re
 terser=os.environ.get('AT_TERSER') or shutil.which('terser')
-src=open(os.path.join(here,'dist','autotask-core.js'),encoding='utf8').read()
+src=open(os.path.join(here,DISTNAME,'autotask-core.js'),encoding='utf8').read()
 if terser:
     mini=subprocess.run([terser,'-c','-m','--comments','false'],input=src,capture_output=True,text=True,check=True).stdout
 else:
     mini=src; print('terser nenalezen – bez minifikace')
-open(os.path.join(here,'dist','autotask-snippet.js'),'w',encoding='utf8').write(mini)
+open(os.path.join(here,DISTNAME,'autotask-snippet.js'),'w',encoding='utf8').write(mini)
 light='javascript:'+_re.sub(r'[%#\n\r]|[^\x00-\x7f]',lambda m:urllib.parse.quote(m.group(0)),mini)
-open(os.path.join(here,'dist','bookmarklet-mini.txt'),'w',encoding='utf8').write(light)
+open(os.path.join(here,DISTNAME,'bookmarklet-mini.txt'),'w',encoding='utf8').write(light)
 b64=base64.b64encode(gzip.compress(mini.encode('utf8'),9)).decode()
 loader=("(async()=>{try{const b=Uint8Array.from(atob('%s'),c=>c.charCodeAt(0));"
  "const s=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text();"
  "try{(0,eval)(s)}catch(e1){const u=URL.createObjectURL(new Blob([s],{type:'text/javascript'}));const t=document.createElement('script');"
  "t.src=u;t.onerror=()=>alert('AutoTask: stránka blokuje spuštění skriptu (CSP).');document.body.appendChild(t)}}catch(e){alert('AutoTask chyba: '+e.message)}})()")%b64
-open(os.path.join(here,'dist','bookmarklet-kratky.js'),'w',encoding='utf8').write(loader)
-open(os.path.join(here,'dist','bookmarklet-kratky.txt'),'w',encoding='utf8').write('javascript:'+loader)
-open(os.path.join(here,'dist','autotask-bookmarks-kratky.html'),'w',encoding='utf8').write(
+open(os.path.join(here,DISTNAME,'bookmarklet-kratky.js'),'w',encoding='utf8').write(loader)
+open(os.path.join(here,DISTNAME,'bookmarklet-kratky.txt'),'w',encoding='utf8').write('javascript:'+loader)
+open(os.path.join(here,DISTNAME,'autotask-bookmarks-kratky.html'),'w',encoding='utf8').write(
  '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><A HREF="javascript:%s">AutoTask Planner</A>\n</DL><p>\n'%urllib.parse.quote(loader,safe="()!~*'"))
 print('mini',len(mini),'bookmarklet-mini',len(light),'bookmarklet-kratky',len(loader)+11)

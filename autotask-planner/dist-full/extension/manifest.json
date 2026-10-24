@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "AutoTask Planner",
+  "version": "2.2",
+  "description": "Pomocník pro hromadné vytváření Global Presales Tasků v Salesforce.",
+  "permissions": [
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://*.lightning.force.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "AutoTask Planner",
+    "default_icon": {
+      "48": "icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.lightning.force.com/*"
+      ],
+      "js": [
+        "core.js",
+        "launcher.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
