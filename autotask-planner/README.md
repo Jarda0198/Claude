@@ -2,6 +2,9 @@
 
 Otevřete opportunity → spusťte nástroj → zadejte jeden nebo víc tasků → **Vytvořit**.
 
+* V panelu je vidět **Stage opportunity** a **fáze DADD** (čtou se z polí opportunity). Kategorie všech tasků je vždy **fáze DADD** (jde změnit ručně nahoře), u tasku vybíráte jen typ.
+* **Týden:** vyberete týden a tasky se rozloží od pondělí do pátku (první v pondělí, poslední v pátek, ostatní rovnoměrně). Datum jde u tasku přepsat.
+* Product je z **omezeného seznamu** (`LIMITED_PRODUCTS` v `src/ui-simple.js`).
 * Product se **předvybere podle produktu v opportunity** (z Products / z názvu opty). Označené ★ jsou produkty z opty, můžete vybrat jiný.
 * U každého tasku zadáte **název**, datum, kategorii a typ (podle `Customer_Interaction_Task_List`), Product a Audience.
 * Tlačítko **＋ Přidat další task** přidá další task (zkopíruje poslední nastavení, název si dáte vlastní).
