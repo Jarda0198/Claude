@@ -22,12 +22,19 @@ window.__AUTOTASK_RUN = async () => { try {
 
   const PRODUCTS = ["No Product", "AI InfiniBand", "AIOps APM", "AIOps - Infrastructure (CloudIQ)", "AI Partners & ISVs", "Ansible Modules", "APEX ACP Azure", "APEX ACP OpenShift", "APEX ACP VMware", "APEX Backup Services", "APEX Block Storage", "APEX Cloud Platforms", "APEX DSS File", "APEX File Storage", "APEX Navigator", "APEX Unstructured", "AppSync", "Avamar", "Azure Stack", "BeyondEdge", "Brocade Fabric", "Canonical", "CEPH", "CI", "Cisco", "Cloud Native DP", "Cloud Strategy", "Connectrix", "Container", "CyberSense", "Data Management Frameworks", "Data Mgmt. Partner", "Data Protection Suite", "Data Science", "Data Security Partners", "DDBEA", "DDVE", "Dell AI Data Platform", "Dell AI Factory", "Dell AI Use Cases", "Dell Automation Platform", "Dell Data Lakehouse", "Dell Developer Cloud", "Dell Enterprise Hub", "Dell Enterprise SONiC", "Dell Managed Service", "DLm", "Dorado Software", "DPA", "ECS/ObjectScale", "EI - Cooling", "EI - Power", "Faction", "GPU Servers (AI Optimized)", "HYCU", "IDPA", "Infra Automation Suite", "Infrastructure as Code (IAC)", "Infrastructure Block", "iSeries (AS400)", "Mainframe", "Managed Container Services", "MetalSoft", "Metronode", "NativeEdge", "Networker", "Networking - Edge", "NSX", "Nutanix", "NVIDIA Spectrum", "OpenManage Enterprise", "Open Telecom Ecosystem Lab", "PowerEdge", "PowerFlex", "PowerMax", "PowerPath", "PowerProtect Cyber Recovery", "PowerProtect Data Domain", "PowerProtect Data Manager", "PowerProtect DM5500", "PowerScale", "PowerStore", "PowerSwitch-AI", "PowerSwitch-Core Network", "PowerSwitch-Leaf Network", "PowerVault", "Project Lightning", "RecoverPoint", "Red Hat", "RP4VMS", "SC Series", "SDP", "SDWAN", "Security Services", "SFM", "SmartFabric OS10", "SRM", "Storage Defender CDM", "Superna", "SUSE", "Unity", "Unstruct. Storage Partners", "VCF on VxRail", "VDI", "VEP Series", "VMware", "VPLEX", "VSAN Ready Node", "VxRail", "XtremIO"];
   const AUDIENCES = ['Customer In-person','Customer Remote','Partner In-person','Partner Remote','Internal'];
+  /* kategorie a typy tasků podle Customer_Interaction_Task_List.pdf */
   const PHASES = [
-    { name:'Discover', types:['Requirements Gathering','Technical Deep-Dive','Asset/Workload/Environment'] },
-    { name:'Analyze', types:['Product Analysis/Assessment','Workload or App Analysis','Cloud Assessment'] },
-    { name:'Design', types:['Solution Design/Validation','Presentation/Proposal Creation','Services Design/Scope','RFP or Bid response'] },
-    { name:'Defend', types:['Closing Demo','Competitive/Alternative Compare','Proof of Concept (CSC)','Proposal Review/Presentation'] }
+    { name:"Account Strategy and Demand", types:["Account Plan/Profile/TAP", "CSC/EBC Single Customer Event", "Customer QBR", "Product Certification", "Roadmap or Tech Update", "Solution/Blueprint/Portfolio Positioning", "Technical Workshop (2+ hour)"] },
+    { name:"Discover", types:["Asset/Workload/Environment", "Early Cycle EBC/CSC", "Lead-in Demo", "Requirements Gathering", "Solution High-Level", "Technical Deep-Dive"] },
+    { name:"Analyze", types:["Cloud Assessment", "Product Analysis/Assessment", "Workload or App Analysis"] },
+    { name:"Design", types:["Presentation/Proposal Creation", "RFP or Bid response", "Services Design/Scope", "Solution Design/Validation"] },
+    { name:"Defend", types:["Closing Demo", "Competitive/Alternative Compare", "Proof of Concept (CSC)", "Proof of Value", "Proposal Review/Presentation"] },
+    { name:"Enablement", types:["Deliver Training Session", "Demo Analysis/Design", "Demo/Seed Unit Engagement", "Solution Offering Creation", "Technical/Business Event"] },
+    { name:"GTO/CTO Activities (PG Interlock & Activation)", types:["Blog Contribution", "Engage CSC to Build a New Demo", "Engage PG on Documentation Creation"] },
+    { name:"Post Sales", types:["Customer Satisfaction Issue", "Engage with Support on SR Escalation", "Installation/Configuration Support", "Presales Services Handover", "Welcome Kit"] }
   ];
+  /* pořadí, ve kterém se tasky plánují automaticky (průběh obchodního případu) */
+  const FLOW = ['Discover','Analyze','Design','Defend'].map(n=>PHASES.find(p=>p.name===n));
   const MIN_PER_WEEK = 3;
   let PACE = 1; const BETWEEN_TASKS = 450;
 
@@ -123,14 +130,14 @@ window.__AUTOTASK_RUN = async () => { try {
     trace('sken: aktivity '+(got?(countTasks()>0?'nalezeny (odkazů na tasky: '+countTasks()+')':'prázdné („No past activity“)'):'NENAČTENY do 14 s')+' po '+Math.round((Date.now()-t0)/100)/10+' s');
     let prev=-1; for(let i=0;i<8;i++){ deepAll('a,button').filter(b=>/view all|show (all|more)|load more|more activities|up next|overdue/i.test(txt(b))).slice(0,8).forEach(b=>{ try{b.click();}catch(e){} }); deepAll('.timeline, [class*="activityTimeline"], .pastActivities, .upcomingActivities, .past-activity-groups, .upcoming-activity-groups, [class*="scroller"], .scrollable').forEach(c=>{ try{ c.scrollTop=c.scrollHeight; }catch(e){} }); try{ (CTX.win||window).scrollTo(0,((CTX.doc||document).body||{}).scrollHeight||0); }catch(e){} await sleep(700); const c=countTasks(); if(c===prev && i>=2) break; prev=c; } await sleep(400); return !!deepOne('.pastActivities, .past-activity-groups, .upcomingActivities, .upcoming-activity-groups, .timeline') || countTasks()>0; }
   function scanActivities(){ const tasks=[]; const seenEl=new Set(); const seenId=new Set(); const sel='.pastActivities .row.Task, .past-activity-groups .row.Task, .upcomingActivities .row.Task, .upcoming-activity-groups .row.Task, [class*="activityTimeline"] [class*="Task"], .timeline .row.Task'; const rows=deepAll(sel); deepAll('a[href*="/lightning/r/00T"]').forEach(a=>{ const r=(a.closest&&(a.closest('.row')||a.closest('li')||a.closest('.slds-timeline__item')))||a; rows.push(r); }); rows.forEach(r=>{ if(!r||seenEl.has(r)) return; seenEl.add(r); const link=deepOne('a[href*="/lightning/r/00T"], a.subjectLink',r); const href=link&&(link.getAttribute('href')||''); const idm=href&&href.match(/(00T[0-9A-Za-z]{12,15})/); const id=idm?idm[1]:null; if(id){ if(seenId.has(id)) return; seenId.add(id); } const subj=txt(deepOne('.subjectText, .subjectLink',r))||txt(link); if(!subj) return; let due=txt(deepOne('.dueDate, [class*="dueDate"], [class*="DueDate"]',r)); if(!due){ const mt=(txt(r)||'').match(/(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}|[A-Za-z]{3,}\.?\s+\d{1,2}(?:,?\s*\d{4})?|\d{1,2}\s+[A-Za-z]{3,}(?:,?\s*\d{4})?)/); due=mt?mt[1]:''; } tasks.push({ id, subject:subj, due, dueDate:parseActivityDate(due) }); }); return tasks; }
-  function phaseRank(subject){ const s=(subject||'').toLowerCase(); if(/requirement|deep.?dive|workload|environment|discover|lead.?in/.test(s)) return 0; if(/assess|analysis|analyz|cloud/.test(s)) return 1; if(/design|proposal|presentation|rfp|scope|validation/.test(s)) return 2; if(/demo|proof|poc|competitive|alternative|defend|review/.test(s)) return 3; return -1; }
+  function phaseRank(subject){ const s=(subject||'').toLowerCase(); const pm=s.match(/^\s*(discover|analyze|design|defend)\b/); if(pm) return ['discover','analyze','design','defend'].indexOf(pm[1]); if(/requirement|deep.?dive|workload|environment|discover|lead.?in/.test(s)) return 0; if(/assess|analysis|analyz|cloud/.test(s)) return 1; if(/design|proposal|presentation|rfp|scope|validation/.test(s)) return 2; if(/demo|proof|poc|competitive|alternative|defend|review/.test(s)) return 3; return -1; }
   /* hooky pro UI */
   let onProgress=()=>{};
   function missingFields(p){ const m=[]; if(!p.date) m.push('Due Date'); if(!p.status) m.push('Status'); if(!p.phase) m.push('Category'); if(!p.type) m.push('Task Type'); if(!p.audience) m.push('Audience'); if(!p.product) m.push('Product'); if(!p.priority) m.push('Priority'); if(!(p.subject||'').trim()) m.push('Subject'); return m; }
   const mkId=()=>'m-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   const STATUSES=['Completed','Not Started','In Progress','Waiting on someone else','Deferred'];
   function mergeProposals(oppId, props){ const keep=state.proposals.filter(p=>p.oppId===oppId&&p.manual&&!p.created); state.proposals=state.proposals.filter(p=>p.oppId!==oppId).concat(props,keep); }
-  function buildProposals(opp, existingTasks){ const startIso=state.settings.rangeStart||localIso(fiscalHalfStart()); const endIso=state.settings.rangeEnd||localIso(new Date()); const perWeek=Math.max(1,+state.settings.perWeek||3); const weeks=weeksForRange(new Date(startIso+'T12:00:00'), new Date(endIso+'T12:00:00')); let maxRank=-1; existingTasks.forEach(t=>{ const r=phaseRank(t.subject); if(r>maxRank) maxRank=r; }); let planIndex=maxRank+1; const out=[]; weeks.forEach((w,wi)=>{ const key=weekKey(w); const count=existingTasks.filter(t=>t.dueDate&&weekKey(t.dueDate)===key).length; const need=Math.max(0,perWeek-count); const phase=PHASES[Math.min(planIndex+wi,PHASES.length-1)]; for(let slot=0;slot<need;slot++){ const date=new Date(w); date.setDate(date.getDate()+Math.min(4,slot+1)); let di=localIso(date); if(di<startIso) di=startIso; if(di>endIso) di=endIso; const type=phase.types[slot%phase.types.length]; out.push({ id:'p-'+opp.id+'-'+di+'-'+slot, oppId:opp.id, oppName:opp.name, week:key, date:di, phase:phase.name, type, subject:phase.name+' - '+type, product:state.settings.product, audience:state.settings.audience, status:state.settings.status||'Completed', priority:state.settings.priority||'Normal' }); } }); return out; }
+  function buildProposals(opp, existingTasks){ const startIso=state.settings.rangeStart||localIso(fiscalHalfStart()); const endIso=state.settings.rangeEnd||localIso(new Date()); const perWeek=Math.max(1,+state.settings.perWeek||3); const weeks=weeksForRange(new Date(startIso+'T12:00:00'), new Date(endIso+'T12:00:00')); let maxRank=-1; existingTasks.forEach(t=>{ const r=phaseRank(t.subject); if(r>maxRank) maxRank=r; }); let planIndex=maxRank+1; const out=[]; weeks.forEach((w,wi)=>{ const key=weekKey(w); const count=existingTasks.filter(t=>t.dueDate&&weekKey(t.dueDate)===key).length; const need=Math.max(0,perWeek-count); const phase=FLOW[Math.min(planIndex+wi,FLOW.length-1)]; for(let slot=0;slot<need;slot++){ const date=new Date(w); date.setDate(date.getDate()+Math.min(4,slot+1)); let di=localIso(date); if(di<startIso) di=startIso; if(di>endIso) di=endIso; const type=phase.types[slot%phase.types.length]; out.push({ id:'p-'+opp.id+'-'+di+'-'+slot, oppId:opp.id, oppName:opp.name, week:key, date:di, phase:phase.name, type, subject:phase.name+' - '+type, product:state.settings.product, audience:state.settings.audience, status:state.settings.status||'Completed', priority:state.settings.priority||'Normal' }); } }); return out; }
 
   /* ---------- kreator Global Presales Task (Aura; dziala na CTX) ---------- */
   function menuOpen(){ return deepAll('a.select[aria-expanded="true"], div.uiMenuList.visible').some(isVisible); }
@@ -561,9 +568,9 @@ window.__AUTOTASK_RUN = async () => { try {
   }
   function genProposals(oppId, name, n, weekMon) {
     state.proposals = state.proposals.filter(p => p.oppId !== oppId || p.created);
-    const flat = PHASES.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
+    const flat = FLOW.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
     let start = 0;
-    if (S.readExisting) { const ex = (state.existing[oppId] && state.existing[oppId].tasks) || []; let mr = -1; ex.forEach(t => { const rk = phaseRank(t.subject); if (rk > mr) mr = rk; }); const si = flat.findIndex(x => x.phase === PHASES[Math.min(mr + 1, PHASES.length - 1)].name); start = si < 0 ? 0 : si; }
+    if (S.readExisting) { const ex = (state.existing[oppId] && state.existing[oppId].tasks) || []; let mr = -1; ex.forEach(t => { const rk = phaseRank(t.subject); if (rk > mr) mr = rk; }); const si = flat.findIndex(x => x.phase === FLOW[Math.min(mr + 1, FLOW.length - 1)].name); start = si < 0 ? 0 : si; }
     for (let i = 0; i < n; i++) {
       const f = flat[(start + i) % flat.length], date = isoShift(weekMon, (i % 4) + 1);
       const p = { id: mkId(), oppId, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', priority: S.priority || 'Normal', manual: true, created: false, error: '' };
@@ -695,7 +702,7 @@ window.__AUTOTASK_RUN = async () => { try {
   function addTask(oppId, from, n) {
     const w = state.worklist.find(x => x.id === oppId); if (!w) return;
     for (let i = 0; i < n; i++) {
-      const base = from ? Object.assign({}, from) : { phase: PHASES[0].name, type: PHASES[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status, priority: S.priority };
+      const base = from ? Object.assign({}, from) : { phase: FLOW[0].name, type: FLOW[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status, priority: S.priority };
       const p = Object.assign(base, { id: mkId(), oppId, oppName: w.name, manual: true, created: false, error: '' });
       if (from && n > 0) p.date = isoShift(from.date, from.__shift || 0);
       p.week = wkOf(p.date); p.subject = from ? from.subject : autoSubject(p);
@@ -849,7 +856,7 @@ window.__AUTOTASK_RUN = async () => { try {
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
-  log('AutoTask Planner v2.10 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
+  log('AutoTask Planner v2.11 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);

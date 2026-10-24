@@ -372,9 +372,9 @@
   }
   function genProposals(oppId, name, n, weekMon) {
     state.proposals = state.proposals.filter(p => p.oppId !== oppId || p.created);
-    const flat = PHASES.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
+    const flat = FLOW.flatMap(ph => ph.types.map(t => ({ phase: ph.name, type: t })));
     let start = 0;
-    if (S.readExisting) { const ex = (state.existing[oppId] && state.existing[oppId].tasks) || []; let mr = -1; ex.forEach(t => { const rk = phaseRank(t.subject); if (rk > mr) mr = rk; }); const si = flat.findIndex(x => x.phase === PHASES[Math.min(mr + 1, PHASES.length - 1)].name); start = si < 0 ? 0 : si; }
+    if (S.readExisting) { const ex = (state.existing[oppId] && state.existing[oppId].tasks) || []; let mr = -1; ex.forEach(t => { const rk = phaseRank(t.subject); if (rk > mr) mr = rk; }); const si = flat.findIndex(x => x.phase === FLOW[Math.min(mr + 1, FLOW.length - 1)].name); start = si < 0 ? 0 : si; }
     for (let i = 0; i < n; i++) {
       const f = flat[(start + i) % flat.length], date = isoShift(weekMon, (i % 4) + 1);
       const p = { id: mkId(), oppId, oppName: name, week: wkOf(date), date, phase: f.phase, type: f.type, subject: f.phase + ' - ' + f.type, product: S.product, audience: S.audience, status: S.status || 'Completed', priority: S.priority || 'Normal', manual: true, created: false, error: '' };
@@ -506,7 +506,7 @@
   function addTask(oppId, from, n) {
     const w = state.worklist.find(x => x.id === oppId); if (!w) return;
     for (let i = 0; i < n; i++) {
-      const base = from ? Object.assign({}, from) : { phase: PHASES[0].name, type: PHASES[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status, priority: S.priority };
+      const base = from ? Object.assign({}, from) : { phase: FLOW[0].name, type: FLOW[0].types[0], date: localIso(new Date()), product: S.product, audience: S.audience, status: S.status, priority: S.priority };
       const p = Object.assign(base, { id: mkId(), oppId, oppName: w.name, manual: true, created: false, error: '' });
       if (from && n > 0) p.date = isoShift(from.date, from.__shift || 0);
       p.week = wkOf(p.date); p.subject = from ? from.subject : autoSubject(p);
@@ -660,7 +660,7 @@
   saveState();
   if (state.proposals.length && mode() === 'list') TAB = 'plan';
   setStatus(L('Připraveno.', 'Ready.'));
-  log('AutoTask Planner v2.10 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
+  log('AutoTask Planner v2.11 (2026-10-24) · '+L('Režim: ', 'Mode: ') + mode() + ' · ' + PWIN.location.pathname + ' · ' + L('formát data: ', 'date format: ') + (S.dateFormat || 'auto'));
   renderAll();
   let lastHref = PWIN.location.href;
   const navTimer = setInterval(() => { if (!PDOC.body.contains(panel)) { clearInterval(navTimer); return; } if (PWIN.location.href !== lastHref) { lastHref = PWIN.location.href; if (!busy) renderAll(); } }, 800);
