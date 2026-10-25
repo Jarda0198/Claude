@@ -43,6 +43,7 @@
   #${ID} .weeks{max-height:210px;overflow:auto;border:1px solid #b7c1ce;border-radius:8px;background:#fff;padding:4px}
   #${ID} .wkc{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:14px} #${ID} .wkc.on{background:#e4f1fd;font-weight:600}
   #${ID} .wkc input{width:18px;height:18px}
+  #${ID} details.more{border-top:1px dashed #d8dde6;padding-top:6px} #${ID} details.more>summary{cursor:pointer;color:var(--mu);font-size:12.5px}
   #${ID} .hint{color:var(--mu);font-size:12px;margin-top:6px}
   #${ID}.run{top:auto;bottom:16px;right:16px;width:min(380px,92vw);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.4)}
   #${ID}.run .body,#${ID}.run .hd .x{display:none}
@@ -72,7 +73,7 @@
   const DADD = ['Discover', 'Analyze', 'Design', 'Defend'];
   /* omezený seznam produktů (upravte podle potřeby) */
   const LIMITED_PRODUCTS = ['PowerStore', 'PowerScale', 'PowerEdge', 'PowerProtect Data Domain', 'PowerFlex', 'PowerMax', 'PowerProtect Data Manager', 'PowerProtect Cyber Recovery', 'PowerVault', 'Dell AI Factory'];
-  const ctx = { stage: '', dadd: 'Discover', daddFound: false, week: defaultWeek(), weeksSel: new Set([defaultWeek()]), perWeek: 5 };
+  const ctx = { stage: '', dadd: 'Discover', daddFound: false, week: defaultWeek(), weeksSel: new Set([defaultWeek()]), perWeek: 5, product: '', productUser: false, audience: S.audience };
   const primaryWeek = () => { const a = [...ctx.weeksSel].sort(); return a[0] || ctx.week; };
   const NAME_SUFFIX = ['follow-up', 'review', 'workshop', 'checkpoint', 'summary', 'update', 'wrap-up'];
   const taskWord = (n) => n === 1 ? 'task' : (n >= 2 && n <= 4) ? 'tasky' : 'tasků';
@@ -152,9 +153,11 @@
   }
   function recordRoot() {
     const x = pageH1(); if (!x) return PDOC; let root = x.h; const key = nrm(x.t);
-    for (let i = 0; i < 40; i++) {
-      const p = root.parentElement || (root.getRootNode && root.getRootNode().host); if (!p || p === PDOC.documentElement || p === PDOC.body) break;
-      if (deepAll('h1', p).map(deepTxt).some(t => t && nrm(t) !== key)) break; root = p;
+    for (let i = 0; i < 60; i++) {
+      const p = root.parentElement || (root.getRootNode && root.getRootNode().host);
+      if (!p || p === PDOC.documentElement || p === PDOC.body) return PDOC;   /* jediná opportunity v dokumentu → celý dokument */
+      if (deepAll('h1', p).map(deepTxt).some(t => t && nrm(t) !== key)) return root;  /* tady začíná jiná stránka záznamu */
+      root = p;
     }
     return root;
   }
@@ -204,11 +207,11 @@
   /* ---------- tasky ---------- */
   let rows = [], rid = null, busy = false;
   const newRow = (from) => {
-    const base = from ? { phase: ctx.dadd, type: typesFor(ctx.dadd).includes(from.type) ? from.type : typesFor(ctx.dadd)[0], product: from.product, audience: from.audience, date: todayIso() } : { phase: ctx.dadd, type: typesFor(ctx.dadd)[0], product: detected[0] || '', audience: S.audience, date: todayIso() };
+    const base = from ? { phase: ctx.dadd, type: typesFor(ctx.dadd).includes(from.type) ? from.type : typesFor(ctx.dadd)[0], product: ctx.product, audience: ctx.audience, date: todayIso() } : { phase: ctx.dadd, type: typesFor(ctx.dadd)[0], product: ctx.product, audience: ctx.audience, date: todayIso() };
     const p = Object.assign({ id: mkId(), oppId: rid, oppName: oppName(), status: 'Completed', priority: 'Normal', created: false, error: '', customSubject: false }, base);
     p.subject = autoSubject(p); p.customSubject = false; p.qty = 1; p.dateCustom = false; p.week = primaryWeek(); return p;
   };
-  function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; diagLogged = false; detectInfo(); rows = [newRow()]; redistribute(); }
+  function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; ctx.productUser = false; ctx.product = detected[0] || ''; diagLogged = false; detectInfo(); rows = [newRow()]; redistribute(); syncProduct(); }
   /* první task v pondělí, poslední v pátek, ostatní rovnoměrně mezi nimi */
   function redistribute() {
     const L2 = rows.filter(p => !p.created); const groups = {};
@@ -242,6 +245,10 @@
     setStatus('Vygenerováno ' + out.length + ' ' + taskWord(out.length) + ' (' + wk.length + ' × ' + ctx.perWeek + '). Zkontrolujte je a klikněte na Vytvořit.');
     log('Vygenerováno ' + out.length + ' tasků: týdny ' + wk.map(isoWeek).join(', ') + ', ' + ctx.perWeek + ' týdně, fáze ' + ctx.dadd);
   }
+  /* společné nastavení: produkt a audience se zadají jednou nahoře a platí pro všechny tasky (kromě ručně přepsaných) */
+  function syncProduct() { if (!ctx.productUser && detected.length) ctx.product = detected[0]; rows.filter(p => !p.created && !p.prodCustom).forEach(p => { p.product = ctx.product; }); }
+  function applyProduct(v) { ctx.product = v; ctx.productUser = true; rows.filter(p => !p.created && !p.prodCustom).forEach(p => { p.product = v; }); }
+  function applyAudience(v) { ctx.audience = v; S.audience = v; saveState(); rows.filter(p => !p.created && !p.audCustom).forEach(p => { p.audience = v; }); }
   function applyDadd(v) { ctx.dadd = v; rows.filter(p => !p.created).forEach(p => { p.phase = v; if (!typesFor(v).includes(p.type)) p.type = typesFor(v)[0]; if (!p.customSubject) p.subject = autoSubject(p); }); }
 
   function render() {
@@ -267,11 +274,13 @@
       h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? String(ctx.daddRaw || ctx.dadd).slice(0, 80) : (ctx.daddText ? 'Pole DADD obsahuje: „' + ctx.daddText.slice(0, 80) + '“ – vyberte fázi ručně' : 'nezjištěno – vyberte ručně'))),
       h('div', { class: 'grid', style: 'margin-top:8px' },
         fld('Fáze, ve které se tasky vytvoří (DADD) *', sel(DADD, ctx.dadd, v => { ctx.daddUser = true; applyDadd(v); render(); }), 'full'),
+        fld('Product pro všechny tasky *', sel([['', '— vyberte —'], ...productOptions()], ctx.product, v => { applyProduct(v); render(); })),
+        fld('Audience pro všechny tasky *', sel(AUDIENCES, ctx.audience, v => { applyAudience(v); render(); })),
         h('div', { class: 'f full' }, h('span', { style: 'font-size:12px;font-weight:600;color:#33475b' }, 'Týdny * (zaškrtněte jeden nebo více)'), weekBoxes),
         fld('Počet tasků v každém týdnu', h('input', { type: 'number', min: 1, max: 20, value: ctx.perWeek, 'aria-label': 'Počet tasků v každém týdnu', onchange: e => { ctx.perWeek = Math.max(1, Math.min(20, +e.target.value || 5)); render(); } })),
         h('div', { class: 'f', style: 'justify-content:flex-end' }, btn(`Vygenerovat ${total} ${taskWord(total)}`, 'ok', () => generate(), { disabled: !nW || busy }))),
       h('div', { class: 'hint' }, `V každém týdnu se tasky rozloží od pondělí do pátku (první v pondělí, poslední v pátek). Každý task má jiný název podle fáze a typu. Generování přepíše dosud nevytvořené tasky.`)));
-    infoEl.append(detected.length ? h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity: ', h('b', null, detected.join(', ')), detectedFrom === 'název opty' ? ' (podle názvu)' : '', ' ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); rows.filter(p => !p.created && !p.product).forEach(p => p.product = detected[0] || ''); render(); }, { 'aria-label': 'Znovu zjistit údaje z opportunity' })) : h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity se nepodařilo zjistit – vyberte ho u tasku. ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); render(); }), ' '));
+    infoEl.append(detected.length ? h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity: ', h('b', null, detected.join(', ')), detectedFrom === 'název opty' ? ' (podle názvu)' : '', ' ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); syncProduct(); render(); }, { 'aria-label': 'Znovu zjistit údaje z opportunity' })) : h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity se nepodařilo zjistit – vyberte ho u tasku. ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); syncProduct(); render(); }), ' '));
     rows.forEach((p, i) => listEl.append(card(p, i)));
     addRow.append(btn('＋ Přidat další task', 'sec', () => { const last = rows[rows.length - 1]; rows.push(newRow(last)); redistribute(); render(); setTimeout(() => { const ins = listEl.querySelectorAll('input[type=text]'); if (ins.length) ins[ins.length - 1].focus(); }, 30); }, { style: 'width:100%' }));
     const open = rows.filter(p => !p.created).reduce((s, p) => s + (p.qty || 1), 0);
@@ -283,7 +292,7 @@
     const miss = missingFields(p);
     const subj = h('input', { type: 'text', value: p.subject, disabled: p.created, placeholder: 'Zadejte název tasku', 'aria-label': 'Název tasku', oninput: e => { p.subject = e.target.value; p.customSubject = e.target.value !== autoSubject(p); } });
     const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } }, { disabled: p.created });
-    const prodSel = sel([['', '— vyberte —'], ...productOptions()], p.product, v => { p.product = v; }, { disabled: p.created });
+    const prodSel = sel([['', '— vyberte —'], ...productOptions()], p.product, v => { p.product = v; p.prodCustom = true; }, { disabled: p.created });
     return h('section', { class: 'card' + (p.created ? ' done' : (p.error ? ' bad' : '')), 'aria-label': 'Task ' + (i + 1) },
       h('div', { class: 'ch' }, h('span', null, (p.created ? '✓ Task ' + (i + 1) + ' vytvořen' : 'Task ' + (i + 1)) + (p.week ? ' · týden ' + isoWeek(p.week) : '')),
         (!p.created && rows.length > 1) ? btn('Odebrat', 'sec sm', () => { rows = rows.filter(x => x.id !== p.id); redistribute(); render(); }) : null),
@@ -295,14 +304,17 @@
           ? h('div', { style: 'min-height:38px;display:flex;align-items:center;font-weight:600' }, (p.dates || []).map(d => ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'][new Date(d + 'T12:00:00').getDay()] + ' ' + dmy(d)).join(', '))
           : h('input', { type: 'date', value: p.date, disabled: p.created, onchange: e => { if (e.target.value) { p.date = e.target.value; p.dateCustom = true; } } })),
         fld('Počet stejných tasků', h('input', { type: 'number', min: 1, max: 20, value: p.qty || 1, disabled: p.created, 'aria-label': 'Počet stejných tasků', onchange: e => { p.qty = Math.max(1, Math.min(20, +e.target.value || 1)); if (p.qty > 1) p.dateCustom = false; redistribute(); render(); } })),
-        fld('Product *', prodSel),
-        fld('Audience *', sel(AUDIENCES, p.audience, v => { p.audience = v; S.audience = v; saveState(); }, { disabled: p.created }))));
+        h('details', { class: 'full more' }, h('summary', null, 'Product a Audience tohoto tasku: ' + (p.product || '— nevybráno —') + ', ' + p.audience + ' (změnit jen pro tento task)'),
+          h('div', { class: 'grid', style: 'margin-top:8px' },
+            fld('Product *', prodSel),
+            fld('Audience *', sel(AUDIENCES, p.audience, v => { p.audience = v; p.audCustom = true; }, { disabled: p.created }))))));
   }
 
   /* ---------- vytvoření ---------- */
   async function run() {
     if (busy) return;
     const open = rows.filter(p => !p.created);
+    if (!ctx.product && open.some(p => !p.product)) { setStatus('Vyberte Product nahoře (pro všechny tasky).'); return; }
     const bad = open.filter(p => missingFields(p).length);
     const CZ = { Subject: 'Název tasku', 'Due Date': 'Datum', Status: 'Status', Category: 'Kategorie', 'Task Type': 'Typ tasku', Audience: 'Audience', Product: 'Product', Priority: 'Priority' };
     if (bad.length) { bad.forEach(p => { p.error = 'Chybí: ' + missingFields(p).map(x => CZ[x] || x).join(', '); }); render(); setStatus('Doplňte označená pole.'); return; }
@@ -327,7 +339,7 @@
     detTries++; const before = detected.join() + '|' + ctx.stage + '|' + ctx.dadd + '|' + ctx.daddFound;
     detectProducts(); detectInfo();
     const after = detected.join() + '|' + ctx.stage + '|' + ctx.dadd + '|' + ctx.daddFound;
-    if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
+    if (after !== before) { syncProduct(); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
   let lastName = '';
@@ -338,9 +350,9 @@
     const before = [ctx.stage, ctx.dadd, ctx.daddFound].join('|'); const bp = detected.join();
     detectInfo(); detectProducts();
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
-    else if (detected.join() !== bp) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); render(); }
+    else if (detected.join() !== bp) { syncProduct(); render(); }
   }, 3000);
-  log('AutoTask jednoduchý v3.11 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.12 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;

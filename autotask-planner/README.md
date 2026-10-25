@@ -8,6 +8,7 @@ Otevřete opportunity → spusťte nástroj → zadejte jeden nebo víc tasků �
 * **Název tasku se doplní automaticky** (kategorie – typ) a mění se s typem; jde přepsat.
 * **Počet stejných tasků:** u každého tasku jde zadat počet kopií (1–20). Kopie mají stejný název i nastavení a datumy se rozloží mezi pondělí a pátek.
 * Čtení Stage/DADD/produktu bere jen **viditelné** prvky (v konzoli Salesforce zůstávají v DOM schované záložky jiných opt). Před uložením se kontroluje pole **Related To** ve formuláři: když patří jiné opportunity, vytváření se zastaví.
+* **Product a Audience se zadávají jednou nahoře** a platí pro všechny tasky (i desítky vygenerovaných). Jednotlivý task jde přepsat v rozbalovací části „Product a Audience tohoto tasku“; ručně přepsaná hodnota se pak už společnou změnou nepřepisuje.
 * Product je z **omezeného seznamu** (`LIMITED_PRODUCTS` v `src/ui-simple.js`).
 * Product se **předvybere podle produktu v opportunity** (z Products / z názvu opty). Označené ★ jsou produkty z opty, můžete vybrat jiný.
 * U každého tasku zadáte **název**, datum, kategorii a typ (podle `Customer_Interaction_Task_List`), Product a Audience.
