@@ -308,7 +308,7 @@ function __atFatal(e){
   let detected = [];
   function detectProducts() {
     const texts = [];
-    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', PDOC).forEach(a => texts.push(txt(a))); } catch (e) {}
+    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', PDOC).forEach(a => texts.push(deepTxt(a))); } catch (e) {}
     const found = [], src = [];
     texts.forEach(tx => matchProducts(tx).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('produkty'); } }));
     if (!found.length) matchProducts(oppName()).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('název opty'); } });
@@ -316,23 +316,34 @@ function __atFatal(e){
     return found;
   }
   let detectedFrom = '';
-  function oppName() { const t = txt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1', PDOC)); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
+  function oppName() { const t = deepTxt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1', PDOC)); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
   const productOptions = () => { const rest = LIMITED_PRODUCTS.filter(p => !detected.includes(p)); return [...detected.map(p => [p, '★ ' + p]), ...rest.map(p => [p, p])]; };
 
   /* ---------- Stage a DADD z opportunity ---------- */
+  /* text uzlu včetně obsahu shadow DOM (textContent ho u webových komponent nevidí) */
+  function deepTxt(n) {
+    const out = []; const walk = (x) => {
+      if (!x) return; if (x.nodeType === 3) { const t = x.textContent.trim(); if (t) out.push(t); return; }
+      if (x.nodeType !== 1 || /^(script|style)$/i.test(x.tagName)) return;
+      if (x.shadowRoot) x.shadowRoot.childNodes.forEach(walk);
+      x.childNodes.forEach(walk);
+    };
+    walk(n); return out.filter((t, i) => t !== out[i - 1]).join(' ').replace(/\s+/g, ' ').trim();
+  }
   function fieldItems() { try { return deepAll('records-record-layout-item, records-highlights-details-item, .slds-form-element', PDOC); } catch (e) { return []; } }
-  function labelOf(it) { return txt(deepOne('.test-id__field-label, p.slds-text-title, .fieldLabel, .slds-form-element__label, label, span.slds-form-element__label', it)); }
+  function labelOf(it) { return deepTxt(deepOne('.test-id__field-label, p.slds-text-title, .fieldLabel, .slds-form-element__label, label, span.slds-form-element__label', it)); }
   function readField(re) {
     for (const it of fieldItems()) {
       const lt = labelOf(it); if (!lt || !re.test(lt)) continue;
-      let v = txt(deepOne('.test-id__field-value, lightning-formatted-text, .slds-form-element__static', it));
-      if (!v) v = txt(deepOne('.slds-form-element__control', it)).replace(lt, '').replace(/Edit\s+[^\n]*$/i, '').trim();
-      v = v.replace(lt, '').replace(/^\s*Edit\s+\S.*$/i, '').trim();
+      let v = deepTxt(deepOne('.test-id__field-value, lightning-formatted-text, .slds-form-element__static', it));
+      if (!v) v = deepTxt(deepOne('.slds-form-element__control', it));
+      if (!v) v = deepTxt(it);
+      v = v.split(lt).join(' ').replace(/\bEdit\s+\S[^|]*$/i, '').replace(/\s+/g, ' ').trim();
       if (v) return v;
     }
     return '';
   }
-  function pathStage() { const c = deepOne('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC); return txt(c); }
+  function pathStage() { const c = deepOne('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC); return deepTxt(c); }
   const normDadd = (t) => { const s = String(t || '').toLowerCase(); if (/discover/.test(s)) return 'Discover'; if (/analy/.test(s)) return 'Analyze'; if (/design/.test(s)) return 'Design'; if (/defend/.test(s)) return 'Defend'; return ''; };
   let diagLogged = false;
   function detectInfo() {
@@ -341,7 +352,7 @@ function __atFatal(e){
     if (nd) { ctx.daddRaw = raw; if (!ctx.daddUser) { ctx.dadd = nd; } ctx.daddFound = true; }
     return { stage, dadd: nd, raw };
   }
-  function logLabels() { if (diagLogged) return; diagLogged = true; try { const ls = [...new Set(fieldItems().map(labelOf).filter(Boolean))].slice(0, 80); log('DIAG nalezená pole na stránce: ' + ls.join(' | ')); log('DIAG hodnoty: Stage="' + (ctx.stage || '') + '" | pole DADD="' + String(ctx.daddText || '').replace(/\s+/g, ' ').slice(0, 400) + '"'); const items = fieldItems().filter(it => /dadd|phase|fáze/i.test(labelOf(it))).slice(0, 6).map(it => labelOf(it) + ' => ' + txt(it).slice(0, 200)); if (items.length) log('DIAG položky DADD/phase: ' + items.join(' || ')); } catch (e) {} }
+  function logLabels() { if (diagLogged) return; diagLogged = true; try { const ls = [...new Set(fieldItems().map(labelOf).filter(Boolean))].slice(0, 80); log('DIAG nalezená pole na stránce: ' + ls.join(' | ')); log('DIAG hodnoty: Stage="' + (ctx.stage || '') + '" | pole DADD="' + String(ctx.daddText || '').replace(/\s+/g, ' ').slice(0, 400) + '"'); const items = fieldItems().filter(it => /dadd|phase|fáze/i.test(labelOf(it))).slice(0, 6).map(it => labelOf(it) + ' => ' + deepTxt(it).slice(0, 200)); if (items.length) log('DIAG položky DADD/phase: ' + items.join(' || ')); } catch (e) {} }
 
   /* ---------- tasky ---------- */
   let rows = [], rid = null, busy = false;
@@ -430,7 +441,7 @@ function __atFatal(e){
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.4 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.5 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
