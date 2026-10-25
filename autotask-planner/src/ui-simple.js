@@ -152,10 +152,26 @@
   function pathStage() { const c = deepAll('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC).filter(vis)[0]; return deepTxt(c); }
   const normDadd = (t) => { const s = String(t || '').toLowerCase(); if (/discover/.test(s)) return 'Discover'; if (/analy/.test(s)) return 'Analyze'; if (/design/.test(s)) return 'Design'; if (/defend/.test(s)) return 'Defend'; return ''; };
   let diagLogged = false;
+  /* druhá strategie: štítek „DADD…“ a text v jeho okolí (když první způsob nenajde hodnotu) */
+  function readDaddAlt() {
+    try {
+      const cands = deepAll('.test-id__field-label, .slds-form-element__label, label, p.slds-text-title, span, p', PDOC).filter(x => vis(x) && /^dadd\b/i.test(deepTxt(x)) && deepTxt(x).length < 50);
+      for (const lab of cands) {
+        const lt = deepTxt(lab); let n = lab;
+        for (let i = 0; i < 6 && n; i++) { n = n.parentElement || (n.getRootNode && n.getRootNode().host); if (!n) break; const t = deepTxt(n).split(lt).join(' ').trim(); const ph = normDadd(t.slice(0, 120)); if (ph) return t.slice(0, 120); }
+      }
+    } catch (e) {}
+    return '';
+  }
+  let lastSig = '';
   function detectInfo() {
     const stage = readField(/^\s*stage\s*$/i) || pathStage(); if (stage) ctx.stage = stage;
-    const raw = readField(/dadd/i); const nd = normDadd(raw); ctx.daddText = raw;
-    if (nd) { ctx.daddRaw = raw; if (!ctx.daddUser) { ctx.dadd = nd; } ctx.daddFound = true; }
+    let raw = readField(/dadd/i); let nd = normDadd(raw); let via = 'pole';
+    if (!nd) { const alt = readDaddAlt(); if (normDadd(alt)) { raw = alt; nd = normDadd(alt); via = 'okolí štítku'; } }
+    ctx.daddText = raw;
+    if (nd) { ctx.daddRaw = raw; ctx.daddFound = true; if (!ctx.daddUser) ctx.dadd = nd; }
+    const sig = [ctx.stage, raw, nd, via].join('|');
+    if (sig !== lastSig) { lastSig = sig; log('Detekce: Stage="' + (ctx.stage || '') + '" | DADD pole="' + String(raw || '').replace(/\s+/g, ' ').slice(0, 80) + '" → ' + (nd ? nd + ' (' + via + ')' : 'nezjištěno')); }
     return { stage, dadd: nd, raw };
   }
   function logLabels() { if (diagLogged) return; diagLogged = true; try { const ls = [...new Set(fieldItems().map(labelOf).filter(Boolean))].slice(0, 80); log('DIAG nalezená pole na stránce: ' + ls.join(' | ')); log('DIAG hodnoty: Stage="' + (ctx.stage || '') + '" | pole DADD="' + String(ctx.daddText || '').replace(/\s+/g, ' ').slice(0, 400) + '"'); const items = fieldItems().filter(it => /dadd|phase|fáze/i.test(labelOf(it))).slice(0, 6).map(it => labelOf(it) + ' => ' + deepTxt(it).slice(0, 200)); if (items.length) log('DIAG položky DADD/phase: ' + items.join(' || ')); } catch (e) {} }
@@ -236,6 +252,7 @@
     const bad = open.filter(p => missingFields(p).length);
     const CZ = { Subject: 'Název tasku', 'Due Date': 'Datum', Status: 'Status', Category: 'Kategorie', 'Task Type': 'Typ tasku', Audience: 'Audience', Product: 'Product', Priority: 'Priority' };
     if (bad.length) { bad.forEach(p => { p.error = 'Chybí: ' + missingFields(p).map(x => CZ[x] || x).join(', '); }); render(); setStatus('Doplňte označená pole.'); return; }
+    const prevD = ctx.dadd; if (!ctx.daddUser) { detectInfo(); if (ctx.dadd !== prevD) { applyDadd(ctx.dadd); render(); setStatus('Fáze DADD se změnila na ' + ctx.dadd + ' – zkontrolujte tasky a spusťte znovu.'); log('Fáze DADD se před spuštěním změnila: ' + prevD + ' → ' + ctx.dadd); return; } }
     redistribute();
     const expanded = [];
     open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
@@ -259,7 +276,15 @@
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.7 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  const watch = setInterval(() => {
+    if (!PDOC.body.contains(panel)) { clearInterval(watch); return; }
+    if (busy || mode() !== 'record' || /\/related\//.test(PWIN.location.pathname)) return;
+    const before = [ctx.stage, ctx.dadd, ctx.daddFound].join('|'); const bp = detected.join();
+    detectInfo(); detectProducts();
+    if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
+    else if (detected.join() !== bp) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); render(); }
+  }, 3000);
+  log('AutoTask jednoduchý v3.8 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
