@@ -27,7 +27,7 @@
   #${ID} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
   #${ID} .full{grid-column:1/-1}
   #${ID} label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;color:#33475b}
-  #${ID} input[type=text],#${ID} input[type=date],#${ID} select{width:100%;height:38px;border:1px solid #b7c1ce;border-radius:6px;padding:0 8px;font-size:14px;background:#fff;color:var(--tx)}
+  #${ID} input[type=text],#${ID} input[type=date],#${ID} input[type=number],#${ID} select{width:100%;height:38px;border:1px solid #b7c1ce;border-radius:6px;padding:0 8px;font-size:14px;background:#fff;color:var(--tx)}
   #${ID} :focus-visible{outline:3px solid #ffb800;outline-offset:1px}
   #${ID} .btn{border:1px solid transparent;border-radius:7px;height:38px;padding:0 14px;font-weight:700;font-size:14px;cursor:pointer;background:var(--ac);color:#fff}
   #${ID} .btn.sec{background:#fff;color:var(--dk);border-color:#9eb9d6} #${ID} .btn.ok{background:var(--ok)} #${ID} .btn.bad{background:var(--er)}
@@ -163,14 +163,18 @@
   const newRow = (from) => {
     const base = from ? { phase: ctx.dadd, type: typesFor(ctx.dadd).includes(from.type) ? from.type : typesFor(ctx.dadd)[0], product: from.product, audience: from.audience, date: todayIso() } : { phase: ctx.dadd, type: typesFor(ctx.dadd)[0], product: detected[0] || '', audience: S.audience, date: todayIso() };
     const p = Object.assign({ id: mkId(), oppId: rid, oppName: oppName(), status: 'Completed', priority: 'Normal', created: false, error: '', customSubject: false }, base);
-    if (from) { p.subject = ''; p.customSubject = true; } else p.subject = autoSubject(p);
-    p.dateCustom = false; return p;
+    p.subject = autoSubject(p); p.customSubject = false; p.qty = 1; p.dateCustom = false; return p;
   };
   function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; diagLogged = false; detectInfo(); rows = [newRow()]; redistribute(); }
   /* první task v pondělí, poslední v pátek, ostatní rovnoměrně mezi nimi */
   function redistribute() {
-    const L2 = rows.filter(p => !p.created); const n = L2.length;
-    L2.forEach((p, i) => { if (p.dateCustom) return; const off = n === 1 ? 0 : Math.round(i * 4 / (n - 1)); p.date = isoShift(ctx.week, off); });
+    const L2 = rows.filter(p => !p.created); const total = L2.reduce((s, p) => s + (p.qty || 1), 0); let k = 0;
+    L2.forEach(p => {
+      const q = p.qty || 1; p.dates = [];
+      for (let i = 0; i < q; i++) { const off = total <= 1 ? 0 : Math.round(k * 4 / (total - 1)); p.dates.push(isoShift(ctx.week, off)); k++; }
+      if (p.dateCustom && q === 1) p.dates = [p.date];
+      p.date = p.dates[0];
+    });
   }
   function applyDadd(v) { ctx.dadd = v; rows.filter(p => !p.created).forEach(p => { p.phase = v; if (!typesFor(v).includes(p.type)) p.type = typesFor(v)[0]; if (!p.customSubject) p.subject = autoSubject(p); }); }
 
@@ -198,7 +202,7 @@
     infoEl.append(detected.length ? h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity: ', h('b', null, detected.join(', ')), detectedFrom === 'název opty' ? ' (podle názvu)' : '', ' ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); rows.filter(p => !p.created && !p.product).forEach(p => p.product = detected[0] || ''); render(); }, { 'aria-label': 'Znovu zjistit údaje z opportunity' })) : h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity se nepodařilo zjistit – vyberte ho u tasku. ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); render(); }), ' '));
     rows.forEach((p, i) => listEl.append(card(p, i)));
     addRow.append(btn('＋ Přidat další task', 'sec', () => { const last = rows[rows.length - 1]; rows.push(newRow(last)); redistribute(); render(); setTimeout(() => { const ins = listEl.querySelectorAll('input[type=text]'); if (ins.length) ins[ins.length - 1].focus(); }, 30); }, { style: 'width:100%' }));
-    const open = rows.filter(p => !p.created).length;
+    const open = rows.filter(p => !p.created).reduce((s, p) => s + (p.qty || 1), 0);
     runBtn.textContent = open ? `▶ Vytvořit ${open} ${taskWord(open)}` : 'Hotovo';
     runBtn.disabled = busy || !open; if (busy) runBtn.style.display = 'none';
   }
@@ -214,25 +218,33 @@
       p.error ? h('div', { class: 'err', role: 'alert' }, p.error) : null,
       h('div', { class: 'grid' },
         fld('Název tasku *', subj, 'full'),
-        fld('Datum (Due Date) *', h('input', { type: 'date', value: p.date, disabled: p.created, onchange: e => { if (e.target.value) { p.date = e.target.value; p.dateCustom = true; } } })),
-        fld('Product *', prodSel),
         fld('Typ tasku (' + p.phase + ') *', tySel, 'full'),
-        fld('Audience *', sel(AUDIENCES, p.audience, v => { p.audience = v; S.audience = v; saveState(); }, { disabled: p.created }), 'full')));
+        fld(p.qty > 1 ? 'Datum (rozloží se automaticky)' : 'Datum (Due Date) *', p.qty > 1
+          ? h('div', { style: 'min-height:38px;display:flex;align-items:center;font-weight:600' }, (p.dates || []).map(d => ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'][new Date(d + 'T12:00:00').getDay()] + ' ' + dmy(d)).join(', '))
+          : h('input', { type: 'date', value: p.date, disabled: p.created, onchange: e => { if (e.target.value) { p.date = e.target.value; p.dateCustom = true; } } })),
+        fld('Počet stejných tasků', h('input', { type: 'number', min: 1, max: 20, value: p.qty || 1, disabled: p.created, 'aria-label': 'Počet stejných tasků', onchange: e => { p.qty = Math.max(1, Math.min(20, +e.target.value || 1)); if (p.qty > 1) p.dateCustom = false; redistribute(); render(); } })),
+        fld('Product *', prodSel),
+        fld('Audience *', sel(AUDIENCES, p.audience, v => { p.audience = v; S.audience = v; saveState(); }, { disabled: p.created }))));
   }
 
   /* ---------- vytvoření ---------- */
   async function run() {
     if (busy) return;
-    const chosen = rows.filter(p => !p.created);
-    const bad = chosen.filter(p => missingFields(p).length);
+    const open = rows.filter(p => !p.created);
+    const bad = open.filter(p => missingFields(p).length);
     const CZ = { Subject: 'Název tasku', 'Due Date': 'Datum', Status: 'Status', Category: 'Kategorie', 'Task Type': 'Typ tasku', Audience: 'Audience', Product: 'Product', Priority: 'Priority' };
     if (bad.length) { bad.forEach(p => { p.error = 'Chybí: ' + missingFields(p).map(x => CZ[x] || x).join(', '); }); render(); setStatus('Doplňte označená pole.'); return; }
-    chosen.forEach(p => { p.error = ''; p.oppName = oppName(); p.oppId = rid; p.phase = ctx.dadd; });
+    redistribute();
+    const expanded = [];
+    open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
     busy = true; panel.classList.add('run'); stopBtn.style.display = ''; runBtn.style.display = 'none'; progBar.style.width = '0'; render();
-    log('Vytvářím ' + chosen.length + ' ' + taskWord(chosen.length) + '…');
-    try { await fillSelected(chosen.slice(), true, log, setStatus); }
+    log('Vytvářím ' + expanded.length + ' ' + taskWord(expanded.length) + '…');
+    try { await fillSelected(expanded.slice(), true, log, setStatus); }
     catch (e) { log('CHYBA: ' + e.message); }
-    finally { busy = false; panel.classList.remove('run'); stopBtn.style.display = 'none'; runBtn.style.display = ''; render(); }
+    finally {
+      open.forEach(p => { const mine = expanded.filter(x => x.__src === p.id); const done = mine.filter(x => x.created).length; if (done === mine.length) p.created = true; else { p.qty = Math.max(1, mine.length - done); const bad1 = mine.find(x => !x.created && x.error); if (bad1) p.error = bad1.error; } });
+      busy = false; panel.classList.remove('run'); stopBtn.style.display = 'none'; runBtn.style.display = ''; redistribute(); render();
+    }
   }
 
   /* ---------- start ---------- */
@@ -245,7 +257,7 @@
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.5 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.6 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
