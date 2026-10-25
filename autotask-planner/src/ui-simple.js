@@ -40,6 +40,9 @@
   #${ID} .row2{display:flex;gap:8px} #${ID} .row2>*{flex:1}
   #${ID} .ctx{border-left-color:#1fb5ad;margin-bottom:10px}
   #${ID} .kv{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px dashed #e3e8ee} #${ID} .kv span{color:var(--mu)}
+  #${ID} .weeks{max-height:210px;overflow:auto;border:1px solid #b7c1ce;border-radius:8px;background:#fff;padding:4px}
+  #${ID} .wkc{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:14px} #${ID} .wkc.on{background:#e4f1fd;font-weight:600}
+  #${ID} .wkc input{width:18px;height:18px}
   #${ID} .hint{color:var(--mu);font-size:12px;margin-top:6px}
   #${ID}.run{top:auto;bottom:16px;right:16px;width:min(380px,92vw);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.4)}
   #${ID}.run .body,#${ID}.run .hd .x{display:none}
@@ -69,7 +72,9 @@
   const DADD = ['Discover', 'Analyze', 'Design', 'Defend'];
   /* omezený seznam produktů (upravte podle potřeby) */
   const LIMITED_PRODUCTS = ['PowerStore', 'PowerScale', 'PowerEdge', 'PowerProtect Data Domain', 'PowerFlex', 'PowerMax', 'PowerProtect Data Manager', 'PowerProtect Cyber Recovery', 'PowerVault', 'Dell AI Factory'];
-  const ctx = { stage: '', dadd: 'Discover', daddFound: false, week: defaultWeek() };
+  const ctx = { stage: '', dadd: 'Discover', daddFound: false, week: defaultWeek(), weeksSel: new Set([defaultWeek()]), perWeek: 5 };
+  const primaryWeek = () => { const a = [...ctx.weeksSel].sort(); return a[0] || ctx.week; };
+  const NAME_SUFFIX = ['follow-up', 'review', 'workshop', 'checkpoint', 'summary', 'update', 'wrap-up'];
   const taskWord = (n) => n === 1 ? 'task' : (n >= 2 && n <= 4) ? 'tasky' : 'tasků';
   const typesFor = (cat) => { const ph = PHASES.find(x => x.name === cat); return ph ? ph.types : []; };
   const autoSubject = (p) => p.phase + ' - ' + p.type;
@@ -181,18 +186,41 @@
   const newRow = (from) => {
     const base = from ? { phase: ctx.dadd, type: typesFor(ctx.dadd).includes(from.type) ? from.type : typesFor(ctx.dadd)[0], product: from.product, audience: from.audience, date: todayIso() } : { phase: ctx.dadd, type: typesFor(ctx.dadd)[0], product: detected[0] || '', audience: S.audience, date: todayIso() };
     const p = Object.assign({ id: mkId(), oppId: rid, oppName: oppName(), status: 'Completed', priority: 'Normal', created: false, error: '', customSubject: false }, base);
-    p.subject = autoSubject(p); p.customSubject = false; p.qty = 1; p.dateCustom = false; return p;
+    p.subject = autoSubject(p); p.customSubject = false; p.qty = 1; p.dateCustom = false; p.week = primaryWeek(); return p;
   };
   function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; diagLogged = false; detectInfo(); rows = [newRow()]; redistribute(); }
   /* první task v pondělí, poslední v pátek, ostatní rovnoměrně mezi nimi */
   function redistribute() {
-    const L2 = rows.filter(p => !p.created); const total = L2.reduce((s, p) => s + (p.qty || 1), 0); let k = 0;
-    L2.forEach(p => {
-      const q = p.qty || 1; p.dates = [];
-      for (let i = 0; i < q; i++) { const off = total <= 1 ? 0 : Math.round(k * 4 / (total - 1)); p.dates.push(isoShift(ctx.week, off)); k++; }
-      if (p.dateCustom && q === 1) p.dates = [p.date];
-      p.date = p.dates[0];
+    const L2 = rows.filter(p => !p.created); const groups = {};
+    L2.forEach(p => { (groups[p.week || ctx.week] = groups[p.week || ctx.week] || []).push(p); });
+    Object.keys(groups).forEach(w => {
+      const g = groups[w]; const total = g.reduce((s, p) => s + (p.qty || 1), 0); let k = 0;
+      g.forEach(p => {
+        const q = p.qty || 1; p.dates = [];
+        for (let i = 0; i < q; i++) { const off = total <= 1 ? 0 : Math.round(k * 4 / (total - 1)); p.dates.push(isoShift(w, off)); k++; }
+        if (p.dateCustom && q === 1) p.dates = [p.date];
+        p.date = p.dates[0];
+      });
     });
+  }
+  /* vygeneruje pro každý zaškrtnutý týden zadaný počet tasků; názvy se liší, ale odpovídají fázi a typu */
+  function generate() {
+    const wk = [...ctx.weeksSel].sort(); if (!wk.length) { setStatus('Zaškrtněte alespoň jeden týden.'); return; }
+    const types = typesFor(ctx.dadd); const out = [];
+    wk.forEach(w => {
+      const occ = {};
+      for (let i = 0; i < ctx.perWeek; i++) {
+        const t = types[i % types.length]; const k = occ[t] = (occ[t] || 0) + 1;
+        const p = newRow(); p.week = w; p.type = t; p.phase = ctx.dadd; p.qty = 1;
+        let nm = ctx.dadd + ' - ' + t;
+        if (k > 1) { const j = k - 2; nm += ' - ' + NAME_SUFFIX[j % NAME_SUFFIX.length] + (j >= NAME_SUFFIX.length ? ' ' + (Math.floor(j / NAME_SUFFIX.length) + 1) : ''); }
+        if (wk.length > 1) nm += ' (W' + isoWeek(w) + ')';
+        p.subject = nm; p.customSubject = true; out.push(p);
+      }
+    });
+    rows = rows.filter(p => p.created).concat(out); redistribute(); render();
+    setStatus('Vygenerováno ' + out.length + ' ' + taskWord(out.length) + ' (' + wk.length + ' × ' + ctx.perWeek + '). Zkontrolujte je a klikněte na Vytvořit.');
+    log('Vygenerováno ' + out.length + ' tasků: týdny ' + wk.map(isoWeek).join(', ') + ', ' + ctx.perWeek + ' týdně, fáze ' + ctx.dadd);
   }
   function applyDadd(v) { ctx.dadd = v; rows.filter(p => !p.created).forEach(p => { p.phase = v; if (!typesFor(v).includes(p.type)) p.type = typesFor(v)[0]; if (!p.customSubject) p.subject = autoSubject(p); }); }
 
@@ -209,14 +237,20 @@
     }
     runBtn.style.display = '';
     infoEl.textContent = '';
-    const weeks = []; for (let i = -4; i <= 12; i++) weeks.push(isoShift(thisMonday(), 7 * i));
+    const weeks = []; for (let i = -2; i <= 11; i++) weeks.push(isoShift(thisMonday(), 7 * i));
+    const weekBoxes = h('div', { class: 'weeks', role: 'group', 'aria-label': 'Týdny' }, weeks.map(m => h('label', { class: 'wkc' + (ctx.weeksSel.has(m) ? ' on' : '') },
+      h('input', { type: 'checkbox', checked: ctx.weeksSel.has(m), onchange: e => { e.target.checked ? ctx.weeksSel.add(m) : ctx.weeksSel.delete(m); render(); } }),
+      h('span', null, `Týden ${isoWeek(m)} · ${dmy(m)} – ${dmy(isoShift(m, 4))}${m === thisMonday() ? ' (tento)' : ''}`))));
+    const nW = ctx.weeksSel.size, total = nW * ctx.perWeek;
     infoEl.append(h('div', { class: 'card ctx' },
       h('div', { class: 'kv' }, h('span', null, 'Fáze opportunity (Stage)'), h('b', null, ctx.stage || 'nezjištěno')),
       h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? String(ctx.daddRaw || ctx.dadd).slice(0, 80) : (ctx.daddText ? 'Pole DADD obsahuje: „' + ctx.daddText.slice(0, 80) + '“ – vyberte fázi ručně' : 'nezjištěno – vyberte ručně'))),
       h('div', { class: 'grid', style: 'margin-top:8px' },
         fld('Fáze, ve které se tasky vytvoří (DADD) *', sel(DADD, ctx.dadd, v => { ctx.daddUser = true; applyDadd(v); render(); }), 'full'),
-        fld('Týden *', sel(weeks.map(m => [m, `Týden ${isoWeek(m)} · ${dmy(m)} – ${dmy(isoShift(m, 4))}${m === thisMonday() ? ' (tento)' : ''}`]), ctx.week, v => { ctx.week = v; rows.forEach(p => { if (!p.created) p.dateCustom = false; }); redistribute(); render(); }), 'full')),
-      h('div', { class: 'hint' }, 'Tasky se rozloží od pondělí do pátku vybraného týdne (první v pondělí, poslední v pátek).')));
+        h('div', { class: 'f full' }, h('span', { style: 'font-size:12px;font-weight:600;color:#33475b' }, 'Týdny * (zaškrtněte jeden nebo více)'), weekBoxes),
+        fld('Počet tasků v každém týdnu', h('input', { type: 'number', min: 1, max: 20, value: ctx.perWeek, 'aria-label': 'Počet tasků v každém týdnu', onchange: e => { ctx.perWeek = Math.max(1, Math.min(20, +e.target.value || 5)); render(); } })),
+        h('div', { class: 'f', style: 'justify-content:flex-end' }, btn(`Vygenerovat ${total} ${taskWord(total)}`, 'ok', () => generate(), { disabled: !nW || busy }))),
+      h('div', { class: 'hint' }, `V každém týdnu se tasky rozloží od pondělí do pátku (první v pondělí, poslední v pátek). Každý task má jiný název podle fáze a typu. Generování přepíše dosud nevytvořené tasky.`)));
     infoEl.append(detected.length ? h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity: ', h('b', null, detected.join(', ')), detectedFrom === 'název opty' ? ' (podle názvu)' : '', ' ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); rows.filter(p => !p.created && !p.product).forEach(p => p.product = detected[0] || ''); render(); }, { 'aria-label': 'Znovu zjistit údaje z opportunity' })) : h('div', { style: 'margin-bottom:8px' }, 'Product v opportunity se nepodařilo zjistit – vyberte ho u tasku. ', btn('↻ Znovu zjistit', 'sec sm', () => { detectProducts(); detectInfo(); render(); }), ' '));
     rows.forEach((p, i) => listEl.append(card(p, i)));
     addRow.append(btn('＋ Přidat další task', 'sec', () => { const last = rows[rows.length - 1]; rows.push(newRow(last)); redistribute(); render(); setTimeout(() => { const ins = listEl.querySelectorAll('input[type=text]'); if (ins.length) ins[ins.length - 1].focus(); }, 30); }, { style: 'width:100%' }));
@@ -231,7 +265,7 @@
     const tySel = sel(typesFor(p.phase), p.type, v => { p.type = v; if (!p.customSubject) { p.subject = autoSubject(p); subj.value = p.subject; } }, { disabled: p.created });
     const prodSel = sel([['', '— vyberte —'], ...productOptions()], p.product, v => { p.product = v; }, { disabled: p.created });
     return h('section', { class: 'card' + (p.created ? ' done' : (p.error ? ' bad' : '')), 'aria-label': 'Task ' + (i + 1) },
-      h('div', { class: 'ch' }, h('span', null, p.created ? '✓ Task ' + (i + 1) + ' vytvořen' : 'Task ' + (i + 1)),
+      h('div', { class: 'ch' }, h('span', null, (p.created ? '✓ Task ' + (i + 1) + ' vytvořen' : 'Task ' + (i + 1)) + (p.week ? ' · týden ' + isoWeek(p.week) : '')),
         (!p.created && rows.length > 1) ? btn('Odebrat', 'sec sm', () => { rows = rows.filter(x => x.id !== p.id); redistribute(); render(); }) : null),
       p.error ? h('div', { class: 'err', role: 'alert' }, p.error) : null,
       h('div', { class: 'grid' },
@@ -284,7 +318,7 @@
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
     else if (detected.join() !== bp) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); render(); }
   }, 3000);
-  log('AutoTask jednoduchý v3.8 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.9 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
