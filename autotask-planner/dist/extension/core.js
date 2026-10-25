@@ -264,7 +264,7 @@ window.__AUTOTASK_RUN = async () => { try {
   const defaultWeek = () => { const dow = new Date().getDay(); return (dow === 0 || dow === 6) ? isoShift(thisMonday(), 7) : thisMonday(); };
   const DADD = ['Discover', 'Analyze', 'Design', 'Defend'];
   /* omezený seznam produktů (upravte podle potřeby) */
-  const LIMITED_PRODUCTS = ['PowerStore', 'PowerScale', 'PowerEdge', 'PowerProtect Data Domain', 'PowerFlex', 'PowerMax', 'PowerProtect Data Manager', 'PowerProtect Cyber Recovery', 'PowerVault', 'Networking - Edge', 'VxRail', 'VCF on VxRail', 'VMware', 'Nutanix', 'No Product'];
+  const LIMITED_PRODUCTS = ['PowerStore', 'PowerScale', 'PowerEdge', 'PowerProtect Data Domain', 'PowerFlex', 'PowerMax', 'PowerProtect Data Manager', 'PowerProtect Cyber Recovery', 'PowerVault', 'Dell AI Factory'];
   const ctx = { stage: '', dadd: 'Discover', daddFound: false, week: defaultWeek() };
   const taskWord = (n) => n === 1 ? 'task' : (n >= 2 && n <= 4) ? 'tasky' : 'tasků';
   const typesFor = (cat) => { const ph = PHASES.find(x => x.name === cat); return ph ? ph.types : []; };
@@ -430,7 +430,7 @@ window.__AUTOTASK_RUN = async () => { try {
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.2 (2026-10-24) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.3 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
