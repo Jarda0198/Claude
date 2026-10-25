@@ -141,11 +141,11 @@
   let diagLogged = false;
   function detectInfo() {
     const stage = readField(/^\s*stage\s*$/i) || pathStage(); if (stage) ctx.stage = stage;
-    const raw = readField(/dadd/i); const nd = normDadd(raw);
+    const raw = readField(/dadd/i); const nd = normDadd(raw); ctx.daddText = raw;
     if (nd) { ctx.daddRaw = raw; if (!ctx.daddUser) { ctx.dadd = nd; } ctx.daddFound = true; }
     return { stage, dadd: nd, raw };
   }
-  function logLabels() { if (diagLogged) return; diagLogged = true; try { const ls = [...new Set(fieldItems().map(labelOf).filter(Boolean))].slice(0, 60); log('DIAG nalezená pole na stránce: ' + ls.join(' | ')); } catch (e) {} }
+  function logLabels() { if (diagLogged) return; diagLogged = true; try { const ls = [...new Set(fieldItems().map(labelOf).filter(Boolean))].slice(0, 80); log('DIAG nalezená pole na stránce: ' + ls.join(' | ')); log('DIAG hodnoty: Stage="' + (ctx.stage || '') + '" | pole DADD="' + String(ctx.daddText || '').replace(/\s+/g, ' ').slice(0, 400) + '"'); const items = fieldItems().filter(it => /dadd|phase|fáze/i.test(labelOf(it))).slice(0, 6).map(it => labelOf(it) + ' => ' + txt(it).slice(0, 200)); if (items.length) log('DIAG položky DADD/phase: ' + items.join(' || ')); } catch (e) {} }
 
   /* ---------- tasky ---------- */
   let rows = [], rid = null, busy = false;
@@ -179,7 +179,7 @@
     const weeks = []; for (let i = -4; i <= 12; i++) weeks.push(isoShift(thisMonday(), 7 * i));
     infoEl.append(h('div', { class: 'card ctx' },
       h('div', { class: 'kv' }, h('span', null, 'Fáze opportunity (Stage)'), h('b', null, ctx.stage || 'nezjištěno')),
-      h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? (ctx.daddRaw || ctx.dadd) : 'nezjištěno – vyberte ručně')),
+      h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? String(ctx.daddRaw || ctx.dadd).slice(0, 80) : (ctx.daddText ? 'Pole DADD obsahuje: „' + ctx.daddText.slice(0, 80) + '“ – vyberte fázi ručně' : 'nezjištěno – vyberte ručně'))),
       h('div', { class: 'grid', style: 'margin-top:8px' },
         fld('Fáze, ve které se tasky vytvoří (DADD) *', sel(DADD, ctx.dadd, v => { ctx.daddUser = true; applyDadd(v); render(); }), 'full'),
         fld('Týden *', sel(weeks.map(m => [m, `Týden ${isoWeek(m)} · ${dmy(m)} – ${dmy(isoShift(m, 4))}${m === thisMonday() ? ' (tento)' : ''}`]), ctx.week, v => { ctx.week = v; rows.forEach(p => { if (!p.created) p.dateCustom = false; }); redistribute(); render(); }), 'full')),
@@ -234,7 +234,7 @@
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.3 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.4 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
