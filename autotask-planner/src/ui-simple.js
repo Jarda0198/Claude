@@ -117,7 +117,7 @@
   let detected = [];
   function detectProducts() {
     const texts = [];
-    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', PDOC).filter(vis).forEach(a => texts.push(deepTxt(a))); } catch (e) {}
+    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', curRoot()).filter(vis).forEach(a => texts.push(deepTxt(a))); } catch (e) {}
     const found = [], src = [];
     texts.forEach(tx => matchProducts(tx).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('produkty'); } }));
     if (!found.length) matchProducts(oppName()).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('název opty'); } });
@@ -125,7 +125,7 @@
     return found;
   }
   let detectedFrom = '';
-  function oppName() { const t = deepTxt(deepAll('h1 lightning-formatted-text, h1 .slds-page-header__title, h1', PDOC).filter(vis)[0]); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
+  function oppName() { const x = pageH1(); const t = x ? x.t : nTitle(); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
   const productOptions = () => { const rest = LIMITED_PRODUCTS.filter(p => !detected.includes(p)); return [...detected.map(p => [p, '★ ' + p]), ...rest.map(p => [p, p])]; };
 
   /* ---------- Stage a DADD z opportunity ---------- */
@@ -141,7 +141,27 @@
   }
   /* v konzoli Salesforce zůstávají v DOM i schované záložky jiných opt – bereme jen viditelné prvky */
   const vis = (x) => { try { return isVisible(x) && (!x.checkVisibility || x.checkVisibility()); } catch (e) { return false; } };
-  function fieldItems() { try { return deepAll('records-record-layout-item, records-highlights-details-item, .slds-form-element', PDOC).filter(vis); } catch (e) { return []; } }
+  /* --- která část DOM patří aktivní opportunity (v konzoli zůstávají v dokumentu i jiné záložky) --- */
+  const nrm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const nTitle = () => String(document.title || '').replace(/^\s*\(\d+\)\s*/, '').replace(/\s*\|\s*(Opportunity|Salesforce).*$/i, '').trim();
+  function pageH1() {
+    const hs = deepAll('h1', PDOC).filter(vis).map(h => ({ h, t: deepTxt(h) })).filter(x => x.t.length > 2); if (!hs.length) return null;
+    const tt = nrm(nTitle()); const W = PWIN.innerWidth || 1200, H = PWIN.innerHeight || 800;
+    const score = (x) => { let s = 0; const n = nrm(x.t); if (tt && n && (tt.includes(n) || n.includes(tt))) s += 4; try { const r = x.h.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2; if (cx >= 0 && cx <= W) s += 2; if (cy >= -50 && cy <= H) s += 1; } catch (e) {} return s; };
+    return hs.map((x, i) => ({ x, s: score(x), i })).sort((a, b) => b.s - a.s || a.i - b.i)[0].x;
+  }
+  function recordRoot() {
+    const x = pageH1(); if (!x) return PDOC; let root = x.h; const key = nrm(x.t);
+    for (let i = 0; i < 40; i++) {
+      const p = root.parentElement || (root.getRootNode && root.getRootNode().host); if (!p || p === PDOC.documentElement || p === PDOC.body) break;
+      if (deepAll('h1', p).map(deepTxt).some(t => t && nrm(t) !== key)) break; root = p;
+    }
+    return root;
+  }
+  let _rt = null, _rtT = 0;
+  const curRoot = () => { const n = Date.now(); if (!_rt || n - _rtT > 800 || !PDOC.contains(_rt)) { try { _rt = recordRoot(); } catch (e) { _rt = PDOC; } _rtT = n; } return _rt; };
+  recordRootFn = curRoot;
+  function fieldItems() { try { return deepAll('records-record-layout-item, records-highlights-details-item, .slds-form-element', curRoot()).filter(vis); } catch (e) { return []; } }
   function labelOf(it) { return deepTxt(deepOne('.test-id__field-label, p.slds-text-title, .fieldLabel, .slds-form-element__label, label, span.slds-form-element__label', it)); }
   function readField(re) {
     for (const it of fieldItems()) {
@@ -154,13 +174,13 @@
     }
     return '';
   }
-  function pathStage() { const c = deepAll('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC).filter(vis)[0]; return deepTxt(c); }
+  function pathStage() { const c = deepAll('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', curRoot()).filter(vis)[0]; return deepTxt(c); }
   const normDadd = (t) => { const s = String(t || '').toLowerCase(); if (/discover/.test(s)) return 'Discover'; if (/analy/.test(s)) return 'Analyze'; if (/design/.test(s)) return 'Design'; if (/defend/.test(s)) return 'Defend'; return ''; };
   let diagLogged = false;
   /* druhá strategie: štítek „DADD…“ a text v jeho okolí (když první způsob nenajde hodnotu) */
   function readDaddAlt() {
     try {
-      const cands = deepAll('.test-id__field-label, .slds-form-element__label, label, p.slds-text-title, span, p', PDOC).filter(x => vis(x) && /^dadd\b/i.test(deepTxt(x)) && deepTxt(x).length < 50);
+      const cands = deepAll('.test-id__field-label, .slds-form-element__label, label, p.slds-text-title, span, p', curRoot()).filter(x => vis(x) && /^dadd\b/i.test(deepTxt(x)) && deepTxt(x).length < 50);
       for (const lab of cands) {
         const lt = deepTxt(lab); let n = lab;
         for (let i = 0; i < 6 && n; i++) { n = n.parentElement || (n.getRootNode && n.getRootNode().host); if (!n) break; const t = deepTxt(n).split(lt).join(' ').trim(); const ph = normDadd(t.slice(0, 120)); if (ph) return t.slice(0, 120); }
@@ -289,7 +309,7 @@
     const prevD = ctx.dadd; if (!ctx.daddUser) { detectInfo(); if (ctx.dadd !== prevD) { applyDadd(ctx.dadd); render(); setStatus('Fáze DADD se změnila na ' + ctx.dadd + ' – zkontrolujte tasky a spusťte znovu.'); log('Fáze DADD se před spuštěním změnila: ' + prevD + ' → ' + ctx.dadd); return; } }
     redistribute();
     const expanded = [];
-    open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
+    open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppAlt: [nTitle()], oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
     busy = true; panel.classList.add('run'); stopBtn.style.display = ''; runBtn.style.display = 'none'; progBar.style.width = '0'; render();
     log('Vytvářím ' + expanded.length + ' ' + taskWord(expanded.length) + '…');
     try { await fillSelected(expanded.slice(), true, log, setStatus); }
@@ -310,15 +330,17 @@
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
+  let lastName = '';
   const watch = setInterval(() => {
     if (!PDOC.body.contains(panel)) { clearInterval(watch); return; }
     if (busy || mode() !== 'record' || /\/related\//.test(PWIN.location.pathname)) return;
+    _rt = null; const nmNow = oppName(); if (nmNow !== lastName) { lastName = nmNow; detectProducts(); if (!ctx.daddUser) ctx.daddFound = false; render(); }
     const before = [ctx.stage, ctx.dadd, ctx.daddFound].join('|'); const bp = detected.join();
     detectInfo(); detectProducts();
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
     else if (detected.join() !== bp) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); render(); }
   }, 3000);
-  log('AutoTask jednoduchý v3.9 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.11 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
