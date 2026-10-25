@@ -112,7 +112,7 @@
   let detected = [];
   function detectProducts() {
     const texts = [];
-    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', PDOC).forEach(a => texts.push(deepTxt(a))); } catch (e) {}
+    try { deepAll('a[href*="/lightning/r/OpportunityLineItem/"], a[href*="/lightning/r/Product2/"]', PDOC).filter(vis).forEach(a => texts.push(deepTxt(a))); } catch (e) {}
     const found = [], src = [];
     texts.forEach(tx => matchProducts(tx).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('produkty'); } }));
     if (!found.length) matchProducts(oppName()).forEach(p => { if (!found.includes(p)) { found.push(p); src.push('název opty'); } });
@@ -120,7 +120,7 @@
     return found;
   }
   let detectedFrom = '';
-  function oppName() { const t = deepTxt(deepOne('h1 lightning-formatted-text, h1 .slds-page-header__title, h1', PDOC)); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
+  function oppName() { const t = deepTxt(deepAll('h1 lightning-formatted-text, h1 .slds-page-header__title, h1', PDOC).filter(vis)[0]); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
   const productOptions = () => { const rest = LIMITED_PRODUCTS.filter(p => !detected.includes(p)); return [...detected.map(p => [p, '★ ' + p]), ...rest.map(p => [p, p])]; };
 
   /* ---------- Stage a DADD z opportunity ---------- */
@@ -134,7 +134,9 @@
     };
     walk(n); return out.filter((t, i) => t !== out[i - 1]).join(' ').replace(/\s+/g, ' ').trim();
   }
-  function fieldItems() { try { return deepAll('records-record-layout-item, records-highlights-details-item, .slds-form-element', PDOC); } catch (e) { return []; } }
+  /* v konzoli Salesforce zůstávají v DOM i schované záložky jiných opt – bereme jen viditelné prvky */
+  const vis = (x) => { try { return isVisible(x) && (!x.checkVisibility || x.checkVisibility()); } catch (e) { return false; } };
+  function fieldItems() { try { return deepAll('records-record-layout-item, records-highlights-details-item, .slds-form-element', PDOC).filter(vis); } catch (e) { return []; } }
   function labelOf(it) { return deepTxt(deepOne('.test-id__field-label, p.slds-text-title, .fieldLabel, .slds-form-element__label, label, span.slds-form-element__label', it)); }
   function readField(re) {
     for (const it of fieldItems()) {
@@ -147,7 +149,7 @@
     }
     return '';
   }
-  function pathStage() { const c = deepOne('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC); return deepTxt(c); }
+  function pathStage() { const c = deepAll('.slds-path__item.slds-is-current .slds-path__title, .slds-path__item[aria-selected="true"] .slds-path__title, a.slds-path__link[aria-selected="true"] .slds-path__title', PDOC).filter(vis)[0]; return deepTxt(c); }
   const normDadd = (t) => { const s = String(t || '').toLowerCase(); if (/discover/.test(s)) return 'Discover'; if (/analy/.test(s)) return 'Analyze'; if (/design/.test(s)) return 'Design'; if (/defend/.test(s)) return 'Defend'; return ''; };
   let diagLogged = false;
   function detectInfo() {
@@ -257,7 +259,7 @@
     if (after !== before) { rows.filter(p => !p.created && !p.product).forEach(p => { p.product = detected[0] || ''; }); if (!ctx.daddUser) applyDadd(ctx.dadd); if (!busy) render(); }
     if ((detected.length && ctx.stage && ctx.daddFound) || detTries >= 6) { if (!ctx.daddFound || !ctx.stage) logLabels(); clearInterval(t); }
   }, 2500); }
-  log('AutoTask jednoduchý v3.6 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.7 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
