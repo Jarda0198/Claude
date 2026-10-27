@@ -354,7 +354,7 @@ window.__AUTOTASK_RUN = async () => { try {
     return found;
   }
   let detectedFrom = '';
-  function oppName() { const x = pageH1(); const t = x ? x.t : nTitle(); return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
+  function oppName() { const x = pageH1(); const t = x ? x.t : ''; return String(t || '').replace(/^\s*Opportunity\s*/i, '').replace(/\s*\|\s*Opportunity\s*$/i, '').trim(); }
   const productOptions = () => { const rest = LIMITED_PRODUCTS.filter(p => !detected.includes(p)); return [...detected.map(p => [p, '★ ' + p]), ...rest.map(p => [p, p])]; };
 
   /* ---------- Stage a DADD z opportunity ---------- */
@@ -373,18 +373,46 @@ window.__AUTOTASK_RUN = async () => { try {
   /* --- která část DOM patří aktivní opportunity (v konzoli zůstávají v dokumentu i jiné záložky) --- */
   const nrm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
   const nTitle = () => String(document.title || '').replace(/^\s*\(\d+\)\s*/, '').replace(/\s*\|\s*(Opportunity|Salesforce).*$/i, '').trim();
+  /* hlavička aplikace (např. „Agentforce Studio“) je taky h1 – nesmí se zaměnit za název opportunity */
+  const APP_SEL = '.slds-context-bar, .appName, one-appnav, one-app-nav-bar, nav, [role="banner"], .oneHeader, header';
+  const isAppH1 = (h) => { try { return !!(h.closest && h.closest(APP_SEL)); } catch (e) { return false; } };
+  function appNameText() { try { return nrm(deepTxt(deepAll('.slds-context-bar__app-name, .appName', PDOC).filter(vis)[0])); } catch (e) { return ''; } }
+  function recordH1s() {
+    const app = appNameText();
+    return deepAll('h1', PDOC).filter(vis).filter(h => !isAppH1(h)).map(h => ({ h, t: deepTxt(h) })).filter(x => x.t.length > 2 && !(app && nrm(x.t) === app));
+  }
+  /* záložní zdroj: pole „Opportunity Name“ v detailu */
+  function fieldOppName() {
+    try {
+      for (const it of deepAll('records-record-layout-item, .slds-form-element', PDOC).filter(vis)) {
+        const lt = deepTxt(deepOne('.test-id__field-label, .slds-form-element__label, label', it));
+        if (!/^\s*opportunity name\s*$/i.test(lt)) continue;
+        let v = deepTxt(deepOne('.test-id__field-value, lightning-formatted-text, .slds-form-element__static', it)).split(lt).join(' ').replace(/\bEdit\s+\S[^|]*$/i, '').trim();
+        if (v) return { h: it, t: v };
+      }
+    } catch (e) {}
+    return null;
+  }
   function pageH1() {
-    const hs = deepAll('h1', PDOC).filter(vis).map(h => ({ h, t: deepTxt(h) })).filter(x => x.t.length > 2); if (!hs.length) return null;
-    const tt = nrm(nTitle()); const W = PWIN.innerWidth || 1200, H = PWIN.innerHeight || 800;
-    const score = (x) => { let s = 0; const n = nrm(x.t); if (tt && n && (tt.includes(n) || n.includes(tt))) s += 4; try { const r = x.h.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2; if (cx >= 0 && cx <= W) s += 2; if (cy >= -50 && cy <= H) s += 1; } catch (e) {} return s; };
-    return hs.map((x, i) => ({ x, s: score(x), i })).sort((a, b) => b.s - a.s || a.i - b.i)[0].x;
+    const W = PWIN.innerWidth || 1200, H = PWIN.innerHeight || 800;
+    const score = (x) => {
+      let s = 0; const par = deepTxt(x.h.parentElement || x.h);
+      if (/^\s*opportunity\b/i.test(x.t) || /^\s*opportunity\b/i.test(par)) s += 6;   /* nad názvem je štítek „Opportunity“ */
+      try { if (x.h.closest && x.h.closest('records-highlights2, records-lwc-highlights-panel, force-highlights2, .highlights, .slds-page-header')) s += 4; } catch (e) {}
+      try { const r = x.h.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2; if (cx >= 0 && cx <= W) s += 2; if (cy >= -50 && cy <= H) s += 1; } catch (e) {}
+      return s;
+    };
+    const hs = recordH1s();
+    if (hs.length) return hs.map((x, i) => ({ x, s: score(x), i })).sort((a, b) => b.s - a.s || a.i - b.i)[0].x;
+    return fieldOppName();
   }
   function recordRoot() {
     const x = pageH1(); if (!x) return PDOC; let root = x.h; const key = nrm(x.t);
     for (let i = 0; i < 60; i++) {
       const p = root.parentElement || (root.getRootNode && root.getRootNode().host);
       if (!p || p === PDOC.documentElement || p === PDOC.body) return PDOC;   /* jediná opportunity v dokumentu → celý dokument */
-      if (deepAll('h1', p).map(deepTxt).some(t => t && nrm(t) !== key)) return root;  /* tady začíná jiná stránka záznamu */
+      const app = appNameText();
+      if (deepAll('h1', p).filter(h => !isAppH1(h)).map(deepTxt).some(t => t && t.length > 2 && nrm(t) !== key && !(app && nrm(t) === app))) return root;  /* tady začíná jiná stránka záznamu */
       root = p;
     }
     return root;
@@ -549,7 +577,7 @@ window.__AUTOTASK_RUN = async () => { try {
     const prevD = ctx.dadd; if (!ctx.daddUser) { detectInfo(); if (ctx.dadd !== prevD) { applyDadd(ctx.dadd); render(); setStatus('Fáze DADD se změnila na ' + ctx.dadd + ' – zkontrolujte tasky a spusťte znovu.'); log('Fáze DADD se před spuštěním změnila: ' + prevD + ' → ' + ctx.dadd); return; } }
     redistribute();
     const expanded = [];
-    open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppAlt: [nTitle()], oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
+    open.forEach(p => { p.error = ''; for (let i = 0; i < (p.qty || 1); i++) expanded.push(Object.assign({}, p, { id: mkId(), __src: p.id, qty: 1, created: false, error: '', oppName: oppName(), oppAlt: [(fieldOppName() || {}).t || ''], oppId: rid, phase: ctx.dadd, date: (p.dates && p.dates[i]) || p.date })); });
     busy = true; panel.classList.add('run'); stopBtn.style.display = ''; runBtn.style.display = 'none'; progBar.style.width = '0'; render();
     log('Vytvářím ' + expanded.length + ' ' + taskWord(expanded.length) + '…');
     try { await fillSelected(expanded.slice(), true, log, setStatus); }
@@ -580,7 +608,7 @@ window.__AUTOTASK_RUN = async () => { try {
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
     else if (detected.join() !== bp) { syncProduct(); render(); }
   }, 3000);
-  log('AutoTask jednoduchý v3.13 (2026-10-27) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.14 (2026-10-27) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
