@@ -6,7 +6,7 @@
   const S = state.settings;
   if (!S.audience) S.audience = 'Customer Remote';
   if (!S.dateFormat || (S.dateFormat === 'auto' && !S.dfMigrated)) { S.dateFormat = 'DD.MM.YYYY'; S.dfMigrated = true; }
-  S.autosave = true; S.pace = S.pace || '1'; PACE = +S.pace || 1;
+  S.autosave = true; if (!S.paceV) { S.pace = '0.6'; S.paceV = 2; } S.pace = S.pace || '0.6'; PACE = +S.pace || 1;
 
   const css = `
   #${ID}{--ac:#0176d3;--dk:#032d60;--bd:#d8dde6;--tx:#172b4d;--mu:#5b6b7f;--ok:#2e844a;--er:#ba0517;
@@ -97,7 +97,7 @@
   const copyBtn = btn('Kopírovat log', 'sec sm', () => { const t = fullLog(); try { navigator.clipboard.writeText(t); setStatus('Log zkopírován do schránky.'); } catch (e) { const ta = h('textarea', { value: t }); PDOC.body.append(ta); ta.select(); PDOC.execCommand('copy'); ta.remove(); } });
   const closeBtn = h('button', { 'aria-label': 'Zavřít', title: 'Zavřít', class: 'x', onclick: () => { batchRunning = false; panel.remove(); } }, '✕');
   panel.append(h('div', { class: 'hd' }, h('b', null, 'AutoTask'), h('span', { class: 'sp' }), closeBtn),
-    body, h('div', { class: 'ft' }, h('div', { class: 'prog' }, progBar), statEl, h('div', { class: 'row2' }, runBtn, stopBtn), h('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer' }, fastCb, 'Rychlejší vyplňování (méně pauz; když něco nevyjde, vypněte)'), h('div', { class: 'row2' }, logBtn, copyBtn), logEl));
+    body, h('div', { class: 'ft' }, h('div', { class: 'prog' }, progBar), statEl, h('div', { class: 'row2' }, runBtn, stopBtn), h('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer' }, fastCb, 'Rychlejší vyplňování (doporučeno; když něco nevyjde, vypněte)'), h('div', { class: 'row2' }, logBtn, copyBtn), logEl));
   PDOC.body.append(panel);
 
   const log = (s) => { const line = '[' + stamp() + '] ' + s; logEl.textContent += (logEl.textContent ? '\n' : '') + line; logEl.scrollTop = logEl.scrollHeight; persist(line); try { console.log('[AutoTask]', s); } catch (e) {} if (/CHYBA|ERROR|selhal|nelze potvrdit/i.test(s)) logEl.style.display = ''; };
@@ -211,7 +211,7 @@
   /* druhá strategie: štítek „DADD…“ a text v jeho okolí (když první způsob nenajde hodnotu) */
   function readDaddAlt() {
     try {
-      const cands = deepAll('.test-id__field-label, .slds-form-element__label, label, p.slds-text-title, span, p', curRoot()).filter(x => vis(x) && /^dadd\b/i.test(deepTxt(x)) && deepTxt(x).length < 50);
+      const cands = deepAll('.test-id__field-label, .slds-form-element__label, label, p.slds-text-title', curRoot()).filter(x => vis(x) && /^dadd\b/i.test(deepTxt(x)) && deepTxt(x).length < 50);
       for (const lab of cands) {
         const lt = deepTxt(lab); let n = lab;
         for (let i = 0; i < 6 && n; i++) { n = n.parentElement || (n.getRootNode && n.getRootNode().host); if (!n) break; const t = deepTxt(n).split(lt).join(' ').trim(); const ph = normDadd(t.slice(0, 120)); if (ph) return t.slice(0, 120); }
@@ -239,7 +239,14 @@
     const p = Object.assign({ id: mkId(), oppId: rid, oppName: oppName(), status: 'Completed', priority: 'Normal', created: false, error: '', customSubject: false }, base);
     p.subject = autoSubject(p); p.customSubject = false; p.qty = 1; p.dateCustom = false; p.week = primaryWeek(); return p;
   };
-  function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; ctx.productUser = false; ctx.product = detected[0] || ''; diagLogged = false; detectInfo(); rows = [newRow()]; redistribute(); syncProduct(); }
+  function resetFor(id) { rid = id; ctx.daddUser = false; ctx.daddFound = false; ctx.stage = ''; ctx.productUser = false; ctx.product = ''; ctx.detecting = true; diagLogged = false; rows = [newRow()]; redistribute(); }
+  /* čtení Stage/DADD/produktu proběhne až po vykreslení panelu (dřív blokovalo start o 5–20 s) */
+  function scheduleDetect() {
+    setTimeout(() => {
+      try { detectProducts(); detectInfo(); syncProduct(); if (!ctx.daddUser) applyDadd(ctx.dadd); } catch (e) { log('Detekce selhala: ' + e.message); }
+      ctx.detecting = false; if (!busy) render(); retryDetect();
+    }, 30);
+  }
   /* první task v pondělí, poslední v pátek, ostatní rovnoměrně mezi nimi */
   function redistribute() {
     const L2 = rows.filter(p => !p.created); const groups = {};
@@ -282,7 +289,7 @@
   function render() {
     const onRecord = mode() === 'record';
     const cur = currentRecordId();
-    if (onRecord && cur !== rid) { detectProducts(); resetFor(cur); retryDetect(); }
+    if (onRecord && cur !== rid) { resetFor(cur); scheduleDetect(); }
     oppEl.textContent = onRecord ? (oppName() || cur) : '';
     listEl.textContent = ''; addRow.textContent = '';
     if (!onRecord) { infoEl.textContent = 'Otevřete opportunity (její hlavní stránku) a spusťte nástroj znovu.'; runBtn.style.display = 'none'; return; }
@@ -298,8 +305,8 @@
       h('span', null, `Týden ${isoWeek(m)} · ${dmy(m)} – ${dmy(isoShift(m, 4))}${m === thisMonday() ? ' (tento)' : ''}`))));
     const nW = ctx.weeksSel.size, total = nW * ctx.perWeek;
     infoEl.append(h('div', { class: 'card ctx' },
-      h('div', { class: 'kv' }, h('span', null, 'Fáze opportunity (Stage)'), h('b', null, ctx.stage || 'nezjištěno')),
-      h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? String(ctx.daddRaw || ctx.dadd).slice(0, 80) : (ctx.daddText ? 'Pole DADD obsahuje: „' + ctx.daddText.slice(0, 80) + '“ – vyberte fázi ručně' : 'nezjištěno – vyberte ručně'))),
+      h('div', { class: 'kv' }, h('span', null, 'Fáze opportunity (Stage)'), h('b', null, ctx.stage || (ctx.detecting ? 'zjišťuji…' : 'nezjištěno'))),
+      h('div', { class: 'kv' }, h('span', null, 'Fáze DADD'), h('b', null, ctx.daddFound ? String(ctx.daddRaw || ctx.dadd).slice(0, 80) : (ctx.detecting ? 'zjišťuji…' : (ctx.daddText ? 'Pole DADD obsahuje: „' + ctx.daddText.slice(0, 80) + '“ – vyberte fázi ručně' : 'nezjištěno – vyberte ručně')))),
       h('div', { class: 'grid', style: 'margin-top:8px' },
         fld('Fáze, ve které se tasky vytvoří (DADD) *', sel(DADD, ctx.dadd, v => { ctx.daddUser = true; applyDadd(v); render(); }), 'full'),
         fld('Product pro všechny tasky *', sel([['', '— vyberte —'], ...productOptions()], ctx.product, v => { applyProduct(v); render(); })),
@@ -373,14 +380,14 @@
   let lastName = '';
   const watch = setInterval(() => {
     if (!PDOC.body.contains(panel)) { clearInterval(watch); return; }
-    if (busy || mode() !== 'record' || /\/related\//.test(PWIN.location.pathname)) return;
+    if (busy || ctx.detecting || PDOC.hidden || mode() !== 'record' || /\/related\//.test(PWIN.location.pathname)) return;
     _rt = null; const nmNow = oppName(); if (nmNow !== lastName) { lastName = nmNow; detectProducts(); if (!ctx.daddUser) ctx.daddFound = false; render(); }
     const before = [ctx.stage, ctx.dadd, ctx.daddFound].join('|'); const bp = detected.join();
     detectInfo(); detectProducts();
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
     else if (detected.join() !== bp) { syncProduct(); render(); }
-  }, 3000);
-  log('AutoTask jednoduchý v3.14 (2026-10-27) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  }, 5000);
+  log('AutoTask jednoduchý v3.15 (2026-10-27) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
