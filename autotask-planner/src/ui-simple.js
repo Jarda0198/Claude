@@ -352,7 +352,7 @@
     if ([ctx.stage, ctx.dadd, ctx.daddFound].join('|') !== before) { if (!ctx.daddUser) applyDadd(ctx.dadd); render(); }
     else if (detected.join() !== bp) { syncProduct(); render(); }
   }, 3000);
-  log('AutoTask jednoduchý v3.12 (2026-10-25) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
+  log('AutoTask jednoduchý v3.13 (2026-10-27) · ' + mode() + ' · ' + PWIN.location.pathname + ' · formát data: ' + S.dateFormat);
   setStatus('Připraveno.');
   render();
   let lastHref = PWIN.location.href;
